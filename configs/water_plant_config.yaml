@@ -1,0 +1,107 @@
+# ===================================================================
+# Water Treatment Plant SCADA Simulator Configuration
+# ===================================================================
+
+# simulation:
+#   duration_hours: 48          # How long the simulation will run in simulated hours
+#   time_step_seconds: 10       # The resolution of the simulation (10 seconds per step)
+#   output_csv_path: "datasets/simulation_output.csv"
+
+plc:
+  ip_address: "localhost"     # IP address for the Modbus TCP server
+  port: 5020                  # Port for the Modbus TCP server
+
+# Defines the Modbus register map. All process values are stored here.
+# Addresses are standard Modbus addresses (starting from 1).
+# We primarily use Holding Registers (function code 3).
+register_map:
+  # --- Raw Water Intake ---
+  raw_water_turbidity: { address: 1, type: "hr" }   # (NTU)
+  raw_water_flow_rate: { address: 2, type: "hr" }   # (L/min)
+  intake_pump_status: { address: 3, type: "hr" }    # 1=ON, 0=OFF
+
+  # --- Coagulation & Flocculation ---
+  coagulant_pump_speed: { address: 10, type: "hr" } # (RPM)
+  flocculator_speed: { address: 11, type: "hr" }    # (RPM)
+
+  # --- Sedimentation ---
+  sedimentation_turbidity: { address: 20, type: "hr" } # (NTU)
+
+  # --- Filtration ---
+  filter_outlet_turbidity: { address: 30, type: "hr" } # (NTU)
+  filter_backwash_pump_status: { address: 31, type: "hr" } # 1=ON, 0=OFF
+
+# Defines the normal operating parameters and control logic thresholds.
+process_parameters:
+  raw_water_turbidity_normal: 50
+  raw_water_turbidity_high_threshold: 150
+  coagulant_pump_speed_normal: 100
+  coagulant_pump_speed_high: 200
+  faulty_reading_chance: 0.005 # 0.5% chance per step of a sensor getting stuck
+
+# ===================================================================
+# Cyber Attack Scenarios
+# ===================================================================
+# Define a list of attacks to be executed during the simulation.
+# Timestamps are in 'HH:MM:SS' from the start of the simulation.
+# attack_scenarios:
+#   - name: "Stealthy Sensor Manipulation"
+#     description: "Slightly alter turbidity readings to reduce chemical usage, potentially compromising water quality."
+#     start_time: "02:00:00"
+#     end_time: "04:30:00"
+#     attack_type: "offset_sensor"
+#     target_register: "raw_water_turbidity"
+#     parameters:
+#       offset: -20  # Subtract 20 from the actual value
+
+#   - name: "False High Turbidity Reading"
+#     description: "Force a high turbidity reading to cause overuse of chemicals and trigger unnecessary alarms."
+#     start_time: "08:00:00"
+#     end_time: "08:15:00"
+#     attack_type: "set_sensor_value"
+#     target_register: "raw_water_turbidity"
+#     parameters:
+#       value: 500
+
+#   - name: "Coagulant Pump Shutdown"
+#     description: "Man-in-the-Middle attack to shut down the coagulant pump, halting a critical treatment step."
+#     start_time: "15:30:00"
+#     end_time: "16:00:00"
+#     attack_type: "set_actuator_value"
+#     target_register: "coagulant_pump_speed"
+#     parameters:
+#       value: 0
+
+# ===================================================================
+# EXAMPLE SCENARIO: 1-Hour Automated Run with Randomly Timed Attacks
+# To use this, comment out the 'simulation' and 'attack_scenarios'
+# sections above and uncomment the sections below.
+# ===================================================================
+#
+simulation:
+  duration_hours: 1
+  time_step_seconds: 5
+  output_csv_path: "datasets/1_hour_random_attack_run.csv"
+
+attack_scenarios:
+  - name: "Short Coagulant Pump Outage"
+    start_time: "00:12:00"
+    end_time: "00:13:30"
+    attack_type: "set_actuator_value"
+    target_register: "coagulant_pump_speed"
+    parameters: { value: 0 }
+
+  - name: "Brief False High Turbidity"
+    start_time: "00:28:00"
+    end_time: "00:29:00"
+    attack_type: "set_sensor_value"
+    target_register: "raw_water_turbidity"
+    parameters: { value: 450 }
+
+  - name: "Stealthy Turbidity Offset"
+    start_time: "00:45:00"
+    end_time: "00:50:00"
+    attack_type: "offset_sensor"
+    target_register: "raw_water_turbidity"
+    parameters: { offset: -30 }
+
