@@ -1,0 +1,44 @@
+{
+  "compressorStations": [
+    {
+      "id": "compressorStation_1",
+      "compressors": [
+        {
+          "id": "compressor_1",
+          "drive": "drive_1",
+          "speedMin": 5760.0,
+          "speedMax": 11600.0,
+          "coeffs": {}
+        }
+      ],
+      "drives": [
+        {
+          "id": "drive_1",
+          "coeffs": {
+            "energy_rate_fun_coeff_1": 4001.75
+          }
+        }
+      ]
+    },
+    {
+      "id": "compressorStation_2",
+      "compressors": [
+        {
+          "id": "compressor_2",
+          "drive": "drive_2",
+          "speedMin": 5760.0,
+          "speedMax": 11600.0,
+          "coeffs": {}
+        }
+      ],
+      "drives": [
+        {
+          "id": "drive_2",
+          "coeffs": {
+            "energy_rate_fun_coeff_1": 4001.75
+          }
+        }
+      ]
+    }
+  ]
+}
