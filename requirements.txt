@@ -1,28 +1,36 @@
-Django>=4.2
-lxml
-requests
-numpy
-pandas
-scipy
-matplotlib
-python-dotenv
-xmlschema>=2.0
-Django>=4.2
-eventlet>=0.40.3
-flask>=3.1.2
-flask-socketio>=5.5.1
-lxml
-matplotlib
-networkx>=3.5
-numpy
-pandapipes>=0.12.0
-pandas
-plotly>=6.3.0
-psycopg2-binary>=2.9.10
-pymodbus>=3.11.1
-pymodbustcp>=0.3.0
-python-dotenv
-python-socketio>=5.13.0
-requests
-scipy
-xmlschema>=2.0
+# Gas Pipeline Digital Twin Simulator - Django Implementation
+# Core Dependencies for GasLib-40 Pipeline Simulation
+
+# Django Framework
+Django>=5.2.6
+
+# Scientific Computing Libraries  
+numpy>=2.3.2                    # Numerical computations for physics calculations
+lxml>=6.0.1                     # XML parsing for GasLib-40 network data
+xmlschema>=4.1.0                # XML schema validation for network files
+
+# Development Dependencies (optional)
+python-dotenv>=1.1.1            # Environment variable management
+
+# Removed Dependencies (no longer needed):
+# - Flask & Flask-SocketIO (replaced with Django)
+# - MATLAB/Simulink dependencies (pure Python implementation)
+# - OpenPLC dependencies (Python-native PLC logic)
+# - pandapipes (simplified physics in Python)
+# - psycopg2-binary (using SQLite for simplicity)
+# - pyModbus/pyModbusTCP (no industrial protocols needed)
+# - eventlet/python-socketio (standard HTTP only)
+# - matplotlib/plotly (basic web interface, can be added if needed)
+# - networkx (simplified network handling)
+# - scipy (basic physics calculations only)
+# - pandas (Django ORM handles data management)
+# - requests (not needed for standalone simulator)
+
+# Installation Instructions:
+# pip install -r requirements.txt
+#
+# Database Setup:
+# python manage.py migrate
+#
+# Run Simulator:
+# python manage.py runserver 0.0.0.0:5000

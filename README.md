@@ -1,75 +1,64 @@
-# Gas Pipeline Digital Twin Simulator
+# Gas Pipeline Digital Twin Simulator - Django + GasLib-40
 
 ## Overview
 
-This is a high-fidelity, cyber-resilient gas pipeline digital twin simulator designed for industrial training, testing, and cybersecurity research. The system simulates a complex gas pipeline network based on GasLib-134 standards, featuring realistic physics modeling, industrial control systems (SCADA/PLC), and comprehensive monitoring capabilities. The simulator provides a safe environment for testing operational scenarios, cybersecurity incidents, and control system responses without risking real infrastructure.
+This is a realistic gas pipeline digital twin simulator built with Django, designed for industrial training and simulation. The system simulates a gas pipeline network based on **GasLib-40** standards (40 nodes, 45 pipes), featuring realistic physics modeling, industrial control systems with 8 embedded PLCs, and comprehensive monitoring capabilities. The simulator provides a safe environment for testing operational scenarios and control system responses.
 
 ## Key Features
 
-### 🏭 **8 Custom PLCs with Specialized Functions**
-- **Pressure Control PLC** - PID-based pressure regulation with safety interlocks
-- **Flow Regulation PLC** - Flow rate management and totalizer functions  
-- **Compressor Management PLC** - Dual-compressor sequencing and control
-- **Valve Control PLC** - Actuator positioning and travel monitoring
-- **Safety Monitoring PLC** - System-wide safety zone management
-- **Leak Detection PLC** - Gas leak detection and emergency response
-- **Temperature Control PLC** - Thermal management and compensation
+### 🏭 **8 Embedded PLCs with Specialized Functions**
+- **Pressure Control PLC** - PID-based pressure regulation and monitoring
+- **Flow Regulation PLC** - Flow rate management and control
+- **Compressor Management PLC** - Compressor sequencing and control
+- **Valve Control PLC** - Actuator positioning and valve management
+- **Safety Monitoring PLC** - System-wide safety oversight
+- **Leak Detection PLC** - Gas leak detection and response
+- **Temperature Control PLC** - Thermal management and control
 - **Emergency Shutdown PLC** - Critical safety system management
 
-### 📊 **Comprehensive Sensor Network**
+### 📊 **Simplified Sensor Network**
 - **Pressure Sensors** - Real-time pipeline pressure monitoring
-- **Temperature Sensors** - Gas and equipment temperature tracking
-- **Flow Meters** - Mass flow rate measurements with compensation
-- **Vibration Sensors** - Equipment health monitoring
-- **Gas Composition Analyzers** - Gas quality analysis
-- **Leak Detectors** - Safety monitoring and alarm systems
-- **Valve Position Indicators** - Actuator status and feedback
-- **Compressor Status Sensors** - RPM, temperatures, and operating parameters
+- **Temperature Sensors** - Gas temperature tracking
+- **Flow Meters** - Mass flow rate measurements
 
-### 🌐 **Real-Time Web Interface**
+### 🌐 **Django Web Interface**
 - Interactive dashboard with live data visualization
 - System status monitoring and alarm management
 - PLC status overview with detailed diagnostics
-- Network topology visualization
-- Control panels for simulation management
-- WebSocket-based real-time updates
+- Network topology visualization from GasLib-40 data
+- Simulation management and control panels
+- Comprehensive logging and data retrieval
 
 ## System Architecture
 
 ### Core Framework
-The system is built around a modular, containerized architecture where each major subsystem (physics, PLCs, SCADA, sensors) operates independently but communicates through well-defined interfaces. This design ensures modularity, scalability, and realistic behavior matching real industrial systems.
+The system is built around a **Django-only architecture** where each major subsystem (physics simulation, PLCs, sensors) operates through Django models and services. This design ensures simplicity, maintainability, and realistic behavior matching real industrial systems.
 
-### Physics Engine
-- **GasLib-134 Network Foundation** - Standardized 134-node gas pipeline network
-- **Real-Time Simulation** - Physics calculations at 10Hz update rate
+### GasLib-40 Network Foundation
+- **40-Node Network** - Standardized gas pipeline network with 40 nodes and 45 pipes
+- **Real-Time Simulation** - Physics calculations with configurable timesteps
 - **Transient Dynamics** - Gas flow, pressure variations, and temperature changes
 - **Compressor Modeling** - Realistic compression station behavior
 
 ### Industrial Control System Design
 The control architecture implements eight specialized PLCs distributed across network nodes:
-- Each PLC follows industrial ladder logic patterns
-- Realistic scan cycles and memory structures
+- Each PLC follows industrial control patterns
+- Configurable scan cycles and memory structures
 - Comprehensive alarm systems with severity levels
 - Safety interlocks and emergency shutdown procedures
 
-### SCADA System
-- **Web-based HMI** built with Flask and SocketIO for real-time updates
-- Data aggregation from all PLCs and sensors
-- Alarm management with acknowledgment system
-- Historical data storage and analysis
-- Operational control interfaces
-
-### Communication Architecture
-- **Modbus TCP/IP** simulation for PLC communications
-- **REST APIs** for web interface interactions
-- **WebSocket connections** for real-time data streaming
-- Standard industrial protocol compliance
+### Simulation Engine
+- **Python-Only Implementation** - No external dependencies like MATLAB or OpenPLC
+- **Django Integration** - Built using Django models and services
+- **Comprehensive Logging** - Complete capture of sensor readings, valve operations, and PLC activities
+- **Configurable Duration** - Run simulations for specified time periods
+- **Real-Time Monitoring** - Live updates during simulation execution
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.11+
-- Required packages are automatically installed
+- Django and dependencies (see requirements.txt)
 
 ### Installation & Running
 
@@ -79,210 +68,183 @@ The control architecture implements eight specialized PLCs distributed across ne
    cd gas-pipeline-simulator
    ```
 
-2. **Run the Simulator**
+2. **Install Dependencies**
    ```bash
-   cd gas_simulator
-   python main.py
+   pip install -r requirements.txt
    ```
 
-3. **Access the Dashboard**
+3. **Set Up Database**
+   ```bash
+   python manage.py migrate
+   ```
+
+4. **Load GasLib-40 Network Data**
+   ```bash
+   python manage.py shell
+   # In Django shell:
+   from simulator.services.gaslib_parser import GasLibParser
+   parser = GasLibParser('GasLib-40-v1-20211130/GasLib-40-v1-20211130.net')
+   network = parser.parse_and_create_network()
+   ```
+
+5. **Run the Simulator**
+   ```bash
+   python manage.py runserver 0.0.0.0:5000
+   ```
+
+6. **Access the Dashboard**
    - Open your browser to `http://localhost:5000`
-   - The simulator will automatically start with 8 PLCs and 62 sensors
-   - Real-time data updates every 100ms
+   - Load GasLib-40 network via the interface
+   - Start simulations with custom duration and timestep
+   - Monitor real-time data and PLC operations
 
 ### System Status
-- **🟢 Active:** 8 PLCs running across network nodes
-- **🟢 Active:** 62 sensors providing real-time data  
-- **🟢 Active:** Physics simulation running at 10 Hz
-- **🟢 Active:** Web interface with real-time monitoring
-- **🟢 Active:** WebSocket data streaming
+- **🟢 Active:** 8 PLCs embedded in GasLib-40 structure
+- **🟢 Active:** 3 sensor types (pressure, temperature, flow)
+- **🟢 Active:** Physics simulation with configurable timesteps
+- **🟢 Active:** Django web interface with real-time monitoring
+- **🟢 Active:** Comprehensive logging system
 
 ## Network Topology
 
-The simulator uses a representative GasLib-134 network structure:
-
-```
-Source_1 → Junction_1 → Junction_2 → Compressor_1 → Junction_3 → Junction_4 → Sink_1
-                    ↓                                                        ↓
-                  Sink_2                                               Emergency Systems
-```
+The simulator uses the GasLib-40 network structure with 40 nodes and 45 arcs:
 
 **Node Types:**
-- **Sources (1)** - Gas supply points with pressure control
-- **Junctions (4)** - Pipeline connection points with monitoring
-- **Compressor (1)** - Compression station with management PLC
-- **Sinks (2)** - Gas consumption points with flow regulation
+- **Sources** - Gas supply points with pressure control
+- **Junctions** - Pipeline connection points with monitoring
+- **Compressors** - Compression stations with management PLCs
+- **Sinks** - Gas consumption points with flow regulation
 
-## PLC Distribution Strategy
+**PLC Distribution:** The 8 PLCs are strategically embedded throughout the GasLib-40 network structure based on node types and operational requirements.
 
-| PLC Type | Node Assignment | Primary Function |
-|----------|----------------|------------------|
-| Emergency Shutdown | Source_1 | Critical safety management |
-| Safety Monitoring | Junction_1, Junction_4 | System-wide safety oversight |
-| Leak Detection | Junction_2 | Gas leak detection and response |
-| Compressor Management | Compressor_1 | Compressor control and monitoring |
-| Valve Control | Junction_3 | Valve positioning and control |
-| Flow Regulation | Sink_1, Sink_2 | Flow rate management |
-
-## External Dependencies
-
-### Core Framework
-- **Flask** - Web application framework
-- **Flask-SocketIO** - Real-time bidirectional communication
-- **SQLite3** - Embedded database for data persistence
-
-### Scientific Computing
-- **NumPy** - Numerical computations for physics calculations
-- **SciPy** - Advanced scientific computing for modeling
-- **Pandas** - Data manipulation and time series processing
-
-### Physics Simulation
-- **pandapipes** - Gas pipeline simulation library
-- **NetworkX** - Graph-based network analysis
-- **matplotlib** - Plotting and visualization
-- **plotly** - Interactive web-based charts
-
-### Industrial Protocols
-- **pyModbus** - Modbus TCP/IP implementation
-- **pyModbusTCP** - Alternative Modbus implementation
-
-### Data Processing
-- **lxml** - XML parsing for network data
-- **xmlschema** - XML schema validation
-
-## File Structure
+## Django Application Structure
 
 ```
-gas_simulator/
-├── main.py                 # Main application entry point
-├── plc/                    # PLC implementations
-│   ├── base_plc.py         # Base PLC class with common functionality
-│   ├── pressure_control_plc.py
-│   ├── flow_regulation_plc.py
-│   ├── compressor_management_plc.py
-│   ├── valve_control_plc.py
-│   ├── safety_monitoring_plc.py
-│   ├── leak_detection_plc.py
-│   ├── temperature_control_plc.py
-│   ├── emergency_shutdown_plc.py
-│   └── plc_manager.py      # PLC coordination and management
-├── sensors/                # Sensor implementations
-│   └── sensor_manager.py   # Sensor data generation and management
-├── physics/                # Physics simulation
-│   └── gas_physics_engine.py
-├── scada/                  # SCADA system
-│   └── scada_system.py
-├── database/               # Data management
-│   └── data_manager.py
+simulator/
+├── models.py                # Django models for network, PLCs, sensors
+├── views.py                # API endpoints and web interface
+├── services/               # Simulation engine and parsers
+│   ├── gaslib_parser.py    # GasLib-40 XML parser
+│   └── simulation_engine.py # Physics and PLC simulation
 ├── templates/              # Web interface templates
-│   └── dashboard.html
-└── data/                   # Database and data files
+│   └── simulator/
+│       └── index.html      # Main dashboard
+└── migrations/             # Database migrations
 ```
 
 ## API Endpoints
 
+### Core Simulation
 - `GET /` - Main dashboard interface
-- `GET /api/system/status` - System status and statistics
-- `GET /api/network/data` - Network topology and PLC data
-- `POST /api/simulation/start` - Start simulation
-- `POST /api/simulation/stop` - Stop simulation
+- `GET /api/` - API information and endpoints
+- `GET /api/status/` - System status and statistics
+- `POST /api/start/` - Start simulation (legacy)
+- `POST /api/simulation/start/` - Start simulation with parameters
 
-## Real-Time Features
+### Network Management
+- `POST /api/network/load/` - Load GasLib-40 network data
+- `GET /api/network/<id>/` - Get network topology and state
 
-### WebSocket Events
-- `system_status` - Overall system status updates
-- `simulation_update` - Real-time simulation data
-- `plc_alarm` - PLC alarm notifications
-- `sensor_data` - Live sensor readings
+### Monitoring
+- `GET /api/sensors/readings/` - Current sensor readings
+- `GET /api/plcs/status/` - PLC status overview
+- `GET /api/alarms/` - Active alarms list
+- `POST /api/alarms/<id>/acknowledge/` - Acknowledge alarm
 
-### Dashboard Components
-- **System Status Cards** - Live KPIs and metrics
-- **PLC Status Grid** - Individual PLC monitoring
-- **Network Visualization** - Pipeline topology display
-- **Control Panels** - Simulation management
-- **System Log** - Real-time event logging
+### Data Retrieval
+- `GET /api/simulation/<id>/data/` - Simulation data points
+- `POST /api/simulation/stop/` - Stop current simulation
 
-## Cybersecurity Features
+## Simulation Features
 
-### Defense-in-Depth Architecture
-- Network segmentation between control zones
-- Secure communication protocols
-- Comprehensive monitoring and logging
-- Intrusion detection capabilities
+### Configurable Parameters
+- **Duration:** Simulation runtime (1-3600 seconds)
+- **Time Step:** Calculation interval (0.1-60 seconds)
+- **Network Selection:** Choose loaded GasLib-40 networks
 
-### Threat Modeling
-Based on MITRE ATT&CK for ICS framework:
-- Unauthorized command injection detection
-- Man-in-the-middle attack prevention  
-- Denial of service protection
-- Packet replay detection
+### Comprehensive Logging
+The simulator captures detailed logs for:
+- **Sensor Data:** All pressure, temperature, and flow measurements
+- **PLC Operations:** Input/output states, logic execution, memory usage
+- **Valve Operations:** Position changes, control commands
+- **Alarm Events:** PLC alarms with timestamps and severity
+- **System Events:** Start/stop, network changes, errors
 
-### Security Monitoring
-- Network traffic analysis
-- Protocol anomaly detection
-- Access control and authentication
-- Audit logging and forensics
+### Real-Time Monitoring
+- Live sensor value updates
+- PLC execution status and scan times
+- Active alarm counts and acknowledgments
+- System performance metrics
+- Network topology visualization
 
-## Performance Benchmarks
+## Data Management
 
-The simulator is designed to handle:
-- **Real-time operation** at 10Hz physics simulation
-- **62 sensors** updating simultaneously  
-- **8 PLCs** with independent scan cycles
-- **Web interface** with <100ms latency
-- **Historical data** storage and retrieval
+### Django Models
+- **GasNetwork:** Network topology from GasLib-40
+- **Node/Pipe:** Pipeline components with current states
+- **Sensor:** Pressure, temperature, flow monitoring
+- **PLC:** 8 embedded controllers with logic and memory
+- **SimulationRun:** Simulation execution records
+- **SimulationData:** Time-series data points
+
+### Database Storage
+- **SQLite** for development and testing
+- **Structured logging** with timestamps and relationships
+- **Historical data** retention for analysis
+- **Real-time data** access through Django ORM
+
+## Dependencies
+
+### Core Framework
+- **Django** - Web framework and ORM
+- **Python 3.11+** - Runtime environment
+
+### Scientific Computing
+- **NumPy** - Numerical computations for physics calculations
+- **lxml** - XML parsing for GasLib-40 data
+- **xmlschema** - XML schema validation
+
+### Additional Libraries
+- Standard Python libraries for simulation engine
+- Django built-in features for web interface and database
 
 ## Testing & Validation
 
-### Automated Testing
-- Regression testing against golden baselines
-- Fault injection simulation (FIS)
-- Performance benchmarking
-- Cybersecurity attack simulation
+### Simulation Testing
+- GasLib-40 network loading and parsing
+- PLC logic execution across all 8 controllers
+- Sensor data generation and logging
+- Alarm generation and management
+- Simulation duration and timestep validation
 
-### Benchmark Scenarios
-- Rapid valve closure transient response
-- Compressor trip emergency procedures
-- Large network disturbance handling
-- Cybersecurity stress testing
-
-## Future Enhancements
-
-### Planned Features
-- Advanced physics modeling with MATLAB/Simulink
-- OPC UA secure communication protocols
-- TimescaleDB for high-performance data storage
-- Kubernetes deployment for scalability
-- Machine learning for predictive maintenance
-
-### Integration Capabilities
-- Physical hardware-in-the-loop (HIL) testing
-- External SCADA system connections
-- Cloud-based deployment options
-- IoT sensor integration
+### Integration Testing
+- Django API endpoint functionality
+- Database model relationships
+- Real-time data flow through the system
+- Web interface responsiveness
 
 ## Contributing
 
-This simulator is designed for educational and research purposes. The modular architecture allows for easy extension and customization of:
+This simulator is designed for educational and research purposes. The Django architecture allows for easy extension and customization of:
 
 - Additional PLC types and control strategies
-- New sensor types and failure modes
-- Enhanced physics models and network topologies
-- Advanced cybersecurity scenarios
+- New sensor configurations and failure modes
+- Enhanced physics models within the simulation engine
 - Custom visualization and analysis tools
+- Extended network topologies beyond GasLib-40
 
 ## License
 
-This project is developed for educational and research purposes in industrial control systems and cybersecurity.
+This project is developed for educational and research purposes in industrial control systems simulation.
 
 ## Support & Documentation
 
 For technical support or questions about the simulator:
-- Review the inline code documentation
-- Check the system logs for diagnostic information
+- Review the Django code documentation
+- Check the simulation logs for diagnostic information
 - Monitor the real-time dashboard for system status
-- Use the web interface for interactive exploration
+- Use the web interface API for programmatic access
 
 ---
 
-**Built with industrial-grade components and cybersecurity best practices for safe, realistic pipeline simulation and training.**
+**Built with Django and Python for realistic, maintainable gas pipeline simulation using GasLib-40 network standards.**
