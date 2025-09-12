@@ -5,63 +5,441 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f4; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
-        .header { text-align: center; color: #333; }
-        .status { padding: 20px; background: #e8f5e8; border-left: 5px solid #4caf50; margin: 20px 0; }
-        .button { background: #4caf50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #e8f5e8; padding: 15px; border-left: 5px solid #4caf50; border-radius: 4px; }
+        .stat-card.warning { background: #fff3cd; border-left-color: #ffc107; }
+        .stat-card.error { background: #f8d7da; border-left-color: #dc3545; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 14px; color: #666; margin-top: 5px; }
+        .controls { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .button { background: #4caf50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
         .button:hover { background: #45a049; }
+        .button.secondary { background: #6c757d; }
+        .button.danger { background: #dc3545; }
+        .button:disabled { background: #ccc; cursor: not-allowed; }
+        .section { margin: 30px 0; }
+        .section h3 { color: #333; border-bottom: 2px solid #4caf50; padding-bottom: 10px; }
+        .log { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 4px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .network-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .simulation-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .input-group { margin: 10px 0; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+        .status-warning { background-color: #ffc107; }
+        .alarm-list { background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; }
+        .alarm-item { padding: 10px; border-bottom: 1px solid #eee; }
+        .alarm-critical { border-left: 4px solid #dc3545; }
+        .alarm-high { border-left: 4px solid #fd7e14; }
+        .alarm-medium { border-left: 4px solid #ffc107; }
+        .alarm-low { border-left: 4px solid #20c997; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>{{ title }}</h1>
-            <p>Gas Pipeline Digital Twin Simulator</p>
+            <p>Unified Gas Pipeline Digital Twin Simulator</p>
+            <p><span class="status-indicator status-online"></span>System Online - GasLib-40 Ready</p>
         </div>
         
-        <div class="status">
-            <h3>System Status: Online</h3>
-            <p>Total simulation runs: {{ total_runs }}</p>
-            <p>Ready for GasLib-40 pipeline simulation</p>
+        <!-- System Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ network_count }}</div>
+                <div class="stat-label">Networks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ node_count }}</div>
+                <div class="stat-label">Nodes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ pipe_count }}</div>
+                <div class="stat-label">Pipes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ plc_count }}</div>
+                <div class="stat-label">PLCs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ sensor_count }}</div>
+                <div class="stat-label">Sensors</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ simulation_count }}</div>
+                <div class="stat-label">Simulations</div>
+            </div>
+            <div class="stat-card {% if active_alarms > 0 %}warning{% endif %}">
+                <div class="stat-value">{{ active_alarms }}</div>
+                <div class="stat-label">Active Alarms</div>
+            </div>
         </div>
         
-        <div style="text-align: center;">
-            <button class="button" onclick="startSimulation()">Start New Simulation</button>
-            <button class="button" onclick="checkStatus()">Check Status</button>
+        <!-- Network Management -->
+        <div class="section">
+            <h3>Network Management</h3>
+            <div class="controls">
+                <button class="button" onclick="loadGasLibNetwork()">Load GasLib-40 Network</button>
+                <button class="button secondary" onclick="refreshNetworkData()">Refresh Network Data</button>
+                <div class="network-info" id="networkInfo">
+                    {% for network in networks %}
+                    <div class="stat-card">
+                        <h4>{{ network.name }}</h4>
+                        <p>{{ network.description }}</p>
+                        <p>Nodes: {{ network.nodes.count }} | Pipes: {{ network.pipes.count }}</p>
+                    </div>
+                    {% empty %}
+                    <p>No networks loaded. Click "Load GasLib-40 Network" to get started.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
         
-        <div id="result" style="margin-top: 20px;"></div>
+        <!-- Simulation Controls -->
+        <div class="section">
+            <h3>Simulation Management</h3>
+            <div class="controls">
+                <div class="simulation-params">
+                    <div class="input-group">
+                        <label for="duration">Duration (seconds):</label>
+                        <input type="number" id="duration" value="600" min="1" max="3600">
+                    </div>
+                    <div class="input-group">
+                        <label for="timestep">Time Step (seconds):</label>
+                        <input type="number" id="timestep" value="1.0" min="0.1" max="60" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label for="network">Network:</label>
+                        <select id="network">
+                            {% for network in networks %}
+                            <option value="{{ network.id }}">{{ network.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="button" onclick="startSimulation()">Start Simulation</button>
+                    <button class="button danger" onclick="stopSimulation()">Stop Simulation</button>
+                    <button class="button secondary" onclick="checkStatus()">Check Status</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Simulations -->
+        <div class="section">
+            <h3>Recent Simulations</h3>
+            <div class="stat-card">
+                {% for sim in recent_simulations %}
+                <div style="margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee;">
+                    <strong>{{ sim.run_id }}</strong> - {{ sim.get_status_display }}
+                    <br>Network: {{ sim.network.name }}
+                    <br>Duration: {{ sim.duration }}s | Steps: {{ sim.total_steps }}
+                    <br>Created: {{ sim.created|date:"M d, Y H:i" }}
+                </div>
+                {% empty %}
+                <p>No simulations run yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- PLC Status -->
+        <div class="section">
+            <h3>PLC Status Monitor</h3>
+            <div class="controls">
+                <button class="button secondary" onclick="refreshPLCStatus()">Refresh PLC Status</button>
+                <div id="plcStatus" class="log">
+                    Click "Refresh PLC Status" to view PLC information...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sensor Readings -->
+        <div class="section">
+            <h3>Live Sensor Readings</h3>
+            <div class="controls">
+                <button class="button secondary" onclick="refreshSensorReadings()">Refresh Sensor Readings</button>
+                <div id="sensorReadings" class="log">
+                    Click "Refresh Sensor Readings" to view current sensor data...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active Alarms -->
+        <div class="section">
+            <h3>Active Alarms</h3>
+            <div class="controls">
+                <button class="button secondary" onclick="refreshAlarms()">Refresh Alarms</button>
+                <div id="alarmsList" class="alarm-list">
+                    {% if active_alarms > 0 %}
+                    <p style="padding: 15px;">{{ active_alarms }} active alarms - Click "Refresh Alarms" to view details</p>
+                    {% else %}
+                    <p style="padding: 15px;">No active alarms</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Display -->
+        <div class="section">
+            <h3>System Messages</h3>
+            <div id="result" class="log">
+                System ready. Use the controls above to manage the gas pipeline simulation.
+            </div>
+        </div>
     </div>
     
     <script>
-        function startSimulation() {
-            fetch('/api/start/', {
+        // Global variables
+        let currentSimulationId = null;
+        
+        function logMessage(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            resultDiv.textContent += logEntry;
+            resultDiv.scrollTop = resultDiv.scrollHeight;
+        }
+        
+        function loadGasLibNetwork() {
+            logMessage('Loading GasLib-40 network...');
+            
+            fetch('/api/network/load/', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'}
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById('result').innerHTML = 
-                    '<div style="background: #d4edda; padding: 10px; border-radius: 4px;">' +
-                    'Status: ' + data.status + '<br>' +
-                    'Message: ' + data.message +
-                    '</div>';
+                if (data.status === 'success') {
+                    logMessage(`✓ ${data.message} - ${data.nodes} nodes, ${data.pipes} pipes`);
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    logMessage(`✗ Error: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Network error: ${error.message}`);
+            });
+        }
+        
+        function startSimulation() {
+            const duration = parseInt(document.getElementById('duration').value);
+            const timestep = parseFloat(document.getElementById('timestep').value);
+            const networkSelect = document.getElementById('network');
+            const networkId = networkSelect.value;
+            
+            if (!networkId) {
+                logMessage('✗ Please select a network first');
+                return;
+            }
+            
+            logMessage(`Starting simulation: ${duration}s duration, ${timestep}s timestep...`);
+            
+            fetch('/api/simulation/start/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    network_id: parseInt(networkId),
+                    duration: duration,
+                    time_step: timestep
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentSimulationId = data.simulation_id;
+                    logMessage(`✓ Simulation ${data.run_id} started successfully`);
+                    logMessage(`  Network: ${data.network}`);
+                    logMessage(`  Duration: ${data.duration}s | Time Step: ${data.time_step}s`);
+                } else {
+                    logMessage(`✗ Error: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Error starting simulation: ${error.message}`);
+            });
+        }
+        
+        function stopSimulation() {
+            logMessage('Stopping simulation...');
+            
+            fetch('/api/simulation/stop/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    logMessage('✓ Simulation stopped successfully');
+                    currentSimulationId = null;
+                } else {
+                    logMessage(`✗ Error: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Error stopping simulation: ${error.message}`);
             });
         }
         
         function checkStatus() {
-            fetch('/api/status/')
+            fetch('/api/simulation/status/')
             .then(response => response.json())
             .then(data => {
-                document.getElementById('result').innerHTML = 
-                    '<div style="background: #cce5ff; padding: 10px; border-radius: 4px;">' +
-                    'Status: ' + data.status + '<br>' +
-                    'Message: ' + data.message + '<br>' +
-                    'Total runs: ' + data.total_runs +
-                    '</div>';
+                logMessage('=== System Status ===');
+                logMessage(`Status: ${data.status}`);
+                logMessage(`Networks: ${data.networks} | Nodes: ${data.nodes} | Pipes: ${data.pipes}`);
+                logMessage(`Sensors: ${data.sensors} | PLCs: ${data.plcs}`);
+                logMessage(`Active Alarms: ${data.active_alarms}`);
+                logMessage(`Engine Running: ${data.engine_running}`);
+                
+                if (data.latest_simulation) {
+                    const sim = data.latest_simulation;
+                    logMessage(`Latest Simulation: ${sim.run_id} (${sim.status})`);
+                    logMessage(`  Network: ${sim.network} | Duration: ${sim.duration}s`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Error getting status: ${error.message}`);
             });
         }
+        
+        function refreshNetworkData() {
+            const networkSelect = document.getElementById('network');
+            const networkId = networkSelect.value;
+            
+            if (!networkId) {
+                logMessage('Please select a network first');
+                return;
+            }
+            
+            fetch(`/api/network/${networkId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    logMessage(`Network ${data.network.name}: ${data.nodes.length} nodes, ${data.pipes.length} pipes`);
+                    logMessage(`Sensors: ${data.sensors.length} | PLCs: ${data.plcs.length}`);
+                } else {
+                    logMessage(`✗ Error: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Error: ${error.message}`);
+            });
+        }
+        
+        function refreshPLCStatus() {
+            fetch('/api/plcs/status/')
+            .then(response => response.json())
+            .then(data => {
+                const statusDiv = document.getElementById('plcStatus');
+                if (data.status === 'success') {
+                    let content = `=== PLC Status (${data.total_active} active) ===\n`;
+                    data.plcs.forEach(plc => {
+                        content += `${plc.id} (${plc.type}) @ ${plc.node}\n`;
+                        content += `  Active: ${plc.active} | Inputs: ${plc.inputs} | Outputs: ${plc.outputs}\n`;
+                        content += `  Alarms: ${plc.active_alarms} | Last Scan: ${plc.last_scan || 'Never'}\n\n`;
+                    });
+                    statusDiv.textContent = content;
+                } else {
+                    statusDiv.textContent = `Error: ${data.message}`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('plcStatus').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        function refreshSensorReadings() {
+            fetch('/api/sensors/readings/')
+            .then(response => response.json())
+            .then(data => {
+                const readingsDiv = document.getElementById('sensorReadings');
+                if (data.status === 'success') {
+                    let content = `=== Sensor Readings (${data.total_active} active) ===\n`;
+                    data.sensors.forEach(sensor => {
+                        content += `${sensor.id} (${sensor.type}) @ ${sensor.location}\n`;
+                        content += `  Value: ${sensor.value} ${sensor.unit} | Quality: ${sensor.quality}\n`;
+                        content += `  Last Update: ${sensor.last_update}\n\n`;
+                    });
+                    readingsDiv.textContent = content;
+                } else {
+                    readingsDiv.textContent = `Error: ${data.message}`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('sensorReadings').textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        function refreshAlarms() {
+            fetch('/api/alarms/')
+            .then(response => response.json())
+            .then(data => {
+                const alarmsDiv = document.getElementById('alarmsList');
+                if (data.status === 'success') {
+                    if (data.alarms.length === 0) {
+                        alarmsDiv.innerHTML = '<p style="padding: 15px;">No active alarms</p>';
+                    } else {
+                        let content = '';
+                        data.alarms.forEach(alarm => {
+                            content += `<div class="alarm-item alarm-${alarm.severity.toLowerCase()}">`;
+                            content += `<strong>${alarm.alarm_id}</strong> - ${alarm.severity}`;
+                            content += `<br>PLC: ${alarm.plc_id} (${alarm.plc_type}) @ ${alarm.node_id}`;
+                            content += `<br>Message: ${alarm.message}`;
+                            content += `<br>Time: ${new Date(alarm.timestamp).toLocaleString()}`;
+                            content += `<br><button class="button" onclick="acknowledgeAlarm(${alarm.id})">Acknowledge</button>`;
+                            content += `</div>`;
+                        });
+                        alarmsDiv.innerHTML = content;
+                    }
+                } else {
+                    alarmsDiv.innerHTML = `<p style="padding: 15px;">Error: ${data.message}</p>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('alarmsList').innerHTML = `<p style="padding: 15px;">Error: ${error.message}</p>`;
+            });
+        }
+        
+        function acknowledgeAlarm(alarmId) {
+            fetch(`/api/alarms/${alarmId}/acknowledge/`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({acknowledged_by: 'Web User'})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    logMessage(`✓ ${data.message}`);
+                    refreshAlarms(); // Refresh the alarm list
+                } else {
+                    logMessage(`✗ Error: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                logMessage(`✗ Error acknowledging alarm: ${error.message}`);
+            });
+        }
+        
+        // Auto-refresh functions
+        function startAutoRefresh() {
+            // Refresh status every 30 seconds
+            setInterval(checkStatus, 30000);
+            
+            // Refresh alarms every 10 seconds
+            setInterval(refreshAlarms, 10000);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            logMessage('Gas Pipeline Simulator initialized');
+            checkStatus();
+            startAutoRefresh();
+        });
     </script>
 </body>
 </html>
