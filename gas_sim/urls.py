@@ -6,6 +6,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.index, name='index'),
     
+    # API root endpoint
+    path('api/', views.api_root, name='api_root'),
+    
     # Legacy API endpoints (compatibility)
     path('api/start/', views.start_simulation, name='start_simulation'),
     path('api/status/', views.simulation_status, name='simulation_status'),

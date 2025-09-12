@@ -485,3 +485,22 @@ def sensor_readings(request):
             'status': 'error',
             'message': f'Error getting sensor readings: {str(e)}'
         })
+
+def api_root(request):
+    """API root endpoint to prevent 404 spam"""
+    return JsonResponse({
+        'api_version': '1.0',
+        'simulator': 'Gas Pipeline Digital Twin - GasLib-40',
+        'endpoints': {
+            'status': '/api/status/',
+            'start': '/api/start/', 
+            'stop': '/api/stop/',
+            'load_gaslib': '/api/load_gaslib/',
+            'network': '/api/network/<id>/',
+            'simulation': '/api/simulation/<id>/',
+            'sensors': '/api/sensors/',
+            'plcs': '/api/plcs/',
+            'alarms': '/api/alarms/'
+        },
+        'message': 'Django-only Gas Pipeline Simulator using GasLib-40 network data'
+    })
