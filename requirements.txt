@@ -4,13 +4,18 @@
 # Django Framework
 Django>=5.2.6
 
+# Database Dependencies
+psycopg2-binary>=2.9.9          # PostgreSQL database adapter
+influxdb-client>=1.44.0         # InfluxDB time-series database client
+python-decouple>=3.8            # Environment variable management
+
 # Scientific Computing Libraries  
 numpy>=2.3.2                    # Numerical computations for physics calculations
 lxml>=6.0.1                     # XML parsing for GasLib-40 network data
 xmlschema>=4.1.0                # XML schema validation for network files
 
 # Development Dependencies (optional)
-python-dotenv>=1.1.1            # Environment variable management
+python-dotenv>=1.1.1            # Legacy environment variable management (use python-decouple instead)
 
 # Removed Dependencies (no longer needed):
 # - Flask & Flask-SocketIO (replaced with Django)
