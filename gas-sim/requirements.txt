@@ -1,0 +1,33 @@
+# Gas Pipeline Digital Twin Simulator - Requirements
+# Core web framework and real-time communication
+Flask>=3.1.2
+Flask-SocketIO>=5.5.1
+eventlet>=0.40.3
+python-socketio>=5.13.0
+
+# Scientific computing and data analysis
+numpy>=2.3.2
+scipy>=1.16.1
+pandas>=2.3.2
+
+# Physics simulation and pipeline analysis
+pandapipes>=0.12.0
+networkx>=3.5
+
+# Data visualization and plotting
+matplotlib>=3.10.6
+plotly>=6.3.0
+
+# Industrial communication protocols
+pymodbus>=3.11.1
+pymodbustcp>=0.3.0
+
+# Database connectivity
+psycopg2-binary>=2.9.10
+
+# XML processing for GasLib-134 network data
+lxml>=6.0.1
+xmlschema>=4.1.0
+
+# HTTP requests and utilities
+requests>=2.32.5
