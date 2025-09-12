@@ -39,3 +39,4 @@ python-dotenv>=1.1.1            # Legacy environment variable management (use py
 #
 # Run Simulator:
 # python manage.py runserver 0.0.0.0:5000
+dj-database-url

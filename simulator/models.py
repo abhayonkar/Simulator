@@ -1,6 +1,9 @@
 from django.db import models
 import json
 from datetime import datetime
+from django.db import transaction
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import BTreeIndex, GinIndex
 
 # GasLib-40 Network Models
 class GasNetwork(models.Model):
@@ -163,6 +166,13 @@ class PLCAlarm(models.Model):
     
     def __str__(self):
         return f"{self.plc.plc_id}: {self.alarm_id} ({self.severity})"
+    
+    class Meta:
+        indexes = [
+            BTreeIndex(fields=['plc', 'timestamp']),
+            BTreeIndex(fields=['severity', 'acknowledged']),
+            BTreeIndex(fields=['timestamp']),
+        ]
 
 # Valve Models
 class Valve(models.Model):
@@ -190,6 +200,13 @@ class Valve(models.Model):
     
     def __str__(self):
         return f"{self.valve_id} ({self.get_valve_type_display()}) @ {self.pipe.pipe_id}"
+    
+    class Meta:
+        indexes = [
+            BTreeIndex(fields=['pipe']),
+            BTreeIndex(fields=['valve_type']),
+            BTreeIndex(fields=['is_operational']),
+        ]
 
 # Simulation Models
 class SimulationRun(models.Model):
@@ -224,33 +241,48 @@ class SimulationRun(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"Run {self.run_id} ({self.status})"
+        return f"Simulation {self.run_id} - {self.status}"
+    
+    class Meta:
+        indexes = [
+            BTreeIndex(fields=['network', 'status']),
+            BTreeIndex(fields=['created']),
+            BTreeIndex(fields=['status']),
+        ]
 
-class SimulationData(models.Model):
-    """Stores simulation data points"""
-    run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name='data_points')
-    timestamp = models.FloatField()  # simulation time in seconds
+class SimulationDataReference(models.Model):
+    """Reference to time-series data stored in InfluxDB"""
+    simulation_run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name='data_references')
+    step_start = models.IntegerField()
+    step_end = models.IntegerField()
+    influxdb_start_time = models.DateTimeField()
+    influxdb_end_time = models.DateTimeField()
+    data_points_count = models.IntegerField(default=0)
     
-    # Sensor readings
-    sensor_data = models.JSONField(default=dict, blank=True)
+    # Metadata about what's stored in InfluxDB
+    node_count = models.IntegerField(default=0)
+    pipe_count = models.IntegerField(default=0)
+    sensor_count = models.IntegerField(default=0)
+    plc_count = models.IntegerField(default=0)
     
-    # PLC states
-    plc_data = models.JSONField(default=dict, blank=True)
-    
-    # Valve positions
-    valve_data = models.JSONField(default=dict, blank=True)
-    
-    # Node states
-    node_data = models.JSONField(default=dict, blank=True)
-    
-    # Pipe flows
-    pipe_data = models.JSONField(default=dict, blank=True)
+    # Summary statistics (for quick access)
+    avg_pressure = models.FloatField(null=True, blank=True)
+    max_pressure = models.FloatField(null=True, blank=True)
+    min_pressure = models.FloatField(null=True, blank=True)
+    avg_flow = models.FloatField(null=True, blank=True)
+    max_flow = models.FloatField(null=True, blank=True)
     
     created = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        unique_together = ['run', 'timestamp']
-        ordering = ['timestamp']
+        ordering = ['simulation_run', 'step_start']
+        indexes = [
+            BTreeIndex(fields=['simulation_run', 'step_start']),
+            BTreeIndex(fields=['influxdb_start_time', 'influxdb_end_time']),
+        ]
+    
+    def __str__(self):
+        return f"InfluxDB Data Reference: Steps {self.step_start}-{self.step_end} - {self.simulation_run.run_id}"
 
 # Legacy Run model for compatibility
 class Run(models.Model):
@@ -259,3 +291,11 @@ class Run(models.Model):
     
     # Link to new simulation system
     simulation_run = models.ForeignKey(SimulationRun, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.run_id} at {self.path}"
+    
+    class Meta:
+        indexes = [
+            BTreeIndex(fields=['created']),
+        ]

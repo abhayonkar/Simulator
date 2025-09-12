@@ -1,5 +1,6 @@
 # gas_sim/settings.py
 import os
+import dj_database_url
 
 SECRET_KEY = 'dev-key'
 DEBUG = True
@@ -43,11 +44,19 @@ TEMPLATES = [
     },
 ]
 
+# Database configuration - PostgreSQL
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:password@localhost:5432/gas_sim')
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'db.sqlite3'),
-    }
+    'default': dj_database_url.parse(DATABASE_URL)
+}
+
+# InfluxDB configuration for time-series data
+INFLUXDB_CONFIG = {
+    'url': os.environ.get('INFLUXDB_URL', 'http://localhost:8086'),
+    'token': os.environ.get('INFLUXDB_TOKEN', ''),
+    'org': os.environ.get('INFLUXDB_ORG', 'gas_sim'),
+    'bucket': os.environ.get('INFLUXDB_BUCKET', 'gas_pipeline_data')
 }
 
 STATIC_URL = '/static/'

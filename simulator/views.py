@@ -12,10 +12,11 @@ import logging
 
 from .models import (
     Run, GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve,
-    SimulationRun, SimulationData
+    SimulationRun, SimulationDataReference
 )
 from .services.gaslib_parser import GasLibParser
 from .services.simulation_engine import SimulationEngine
+from .services.influxdb_service import get_influxdb_service
 
 logger = logging.getLogger(__name__)
 
@@ -318,34 +319,69 @@ def network_data(request, network_id):
         })
 
 def simulation_data(request, simulation_id):
-    """Get simulation data points"""
+    """Get simulation data points from InfluxDB"""
     try:
         simulation = get_object_or_404(SimulationRun, id=simulation_id)
         
-        # Get data points (limit to last 1000 for performance)
-        data_points = simulation.data_points.order_by('timestamp')[:1000]
+        # Get limit from request parameters
+        limit = int(request.GET.get('limit', 1000))
         
+        # Query InfluxDB for simulation data
+        influxdb_service = get_influxdb_service()
+        
+        # Get sensor data from InfluxDB
+        sensor_data = influxdb_service.get_sensor_data(
+            simulation_id=simulation.run_id,
+            limit=limit
+        )
+        
+        # Get PLC data from InfluxDB
+        plc_data = influxdb_service.get_plc_data(
+            simulation_id=simulation.run_id,
+            limit=limit
+        )
+        
+        # Get general simulation data
+        simulation_data_points = influxdb_service.get_simulation_data(
+            simulation_id=simulation.run_id,
+            limit=limit
+        )
+        
+        # Process sensor data into time series format
         timestamps = []
         sensor_series = {}
-        plc_series = {}
         
-        for point in data_points:
-            timestamps.append(point.timestamp)
+        for point in sensor_data:
+            timestamp = point.get('_time')
+            sensor_id = point.get('sensor_id')
+            value = point.get('_value', 0)
             
-            # Extract sensor data
-            for sensor_id, value in point.sensor_data.items():
-                if sensor_id not in sensor_series:
-                    sensor_series[sensor_id] = []
-                sensor_series[sensor_id].append(value)
+            if timestamp not in timestamps:
+                timestamps.append(timestamp)
             
-            # Extract PLC data
-            for plc_id, outputs in point.plc_data.items():
-                if plc_id not in plc_series:
-                    plc_series[plc_id] = {}
-                for output_key, output_value in outputs.items():
-                    if output_key not in plc_series[plc_id]:
-                        plc_series[plc_id][output_key] = []
-                    plc_series[plc_id][output_key].append(output_value)
+            if sensor_id not in sensor_series:
+                sensor_series[sensor_id] = []
+            sensor_series[sensor_id].append(value)
+        
+        # Process PLC data
+        plc_series = {}
+        for point in plc_data:
+            plc_id = point.get('plc_id')
+            outputs = point.get('outputs', {})
+            
+            if plc_id not in plc_series:
+                plc_series[plc_id] = {}
+            
+            for output_key, output_value in outputs.items():
+                if output_key not in plc_series[plc_id]:
+                    plc_series[plc_id][output_key] = []
+                plc_series[plc_id][output_key].append(output_value)
+        
+        # If InfluxDB returns no data (dummy mode), provide sample data
+        if not sensor_data and not plc_data:
+            timestamps = ['No data available']
+            sensor_series = {'message': 'InfluxDB running in dummy mode - no real data available'}
+            plc_series = {'message': 'InfluxDB running in dummy mode - no real data available'}
         
         return JsonResponse({
             'status': 'success',
@@ -358,7 +394,8 @@ def simulation_data(request, simulation_id):
             'timestamps': timestamps,
             'sensors': sensor_series,
             'plcs': plc_series,
-            'data_points': len(timestamps)
+            'data_points': len(timestamps),
+            'influxdb_status': 'connected' if sensor_data or plc_data else 'dummy_mode'
         })
         
     except Exception as e:
