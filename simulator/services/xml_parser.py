@@ -4,24 +4,68 @@ from lxml import etree
 
 NS = {'g':'http://gaslib.zib.de/CompressorStations'}
 
-def validate_xml_against_xsd(xml_path, xsd_url=None):
-    # Try to download XSD if URL provided, else skip.
+def validate_xml_against_xsd(xml_path, xsd_path_or_url=None, local_schema_dir=None, timeout=8):
+    """
+    Robust validation using xmlschema with local-schema fallback.
+
+    Parameters
+    ----------
+    xml_path : str
+        Path to XML file to validate.
+    xsd_path_or_url : str or None
+        Path or URL to the main XSD (e.g. 'schema_local/CompressorStations.xsd'
+        or 'http://gaslib.zib.de/schema/CompressorStations.xsd').
+    local_schema_dir : str or None
+        If provided and exists, used as base_url for resolving includes/imports.
+        e.g. '/home/user/gasim/schema_local'
+    timeout : int
+        Timeout (seconds) for remote downloads; only used when fetching remote XSDs.
+
+    Returns
+    -------
+    (bool, str)
+        (True, message) if validated, otherwise (False, message).
+    """
     try:
-        if xsd_url:
-            import requests
-            r = requests.get(xsd_url, timeout=6)
-            if r.status_code == 200:
-                xsd_doc = etree.XML(r.content)
-                xml_doc = etree.parse(xml_path)
-                schema = etree.XMLSchema(xsd_doc)
-                schema.assertValid(xml_doc)
-                return True, 'XML validated against remote XSD.'
-            else:
-                return False, 'Could not download XSD (status %s). Skipping strict validation.' % r.status_code
-        else:
-            return False, 'No XSD URL provided, skipped.'
+        import xmlschema
     except Exception as e:
-        return False, 'Validation skipped / failed: %s' % str(e)
+        return False, f"xmlschema library not installed: {e}"
+
+    try:
+        # prefer local schema directory (so xmlschema resolves relative schemaLocations)
+        if local_schema_dir and os.path.isdir(local_schema_dir):
+            # xsd_path_or_url may be relative: build absolute path
+            if xsd_path_or_url:
+                xsd_abs = os.path.abspath(xsd_path_or_url)
+            else:
+                # try default filename in local dir
+                xsd_abs = os.path.join(local_schema_dir, 'CompressorStations.xsd')
+            base = 'file:///' + os.path.abspath(local_schema_dir).rstrip('/') + '/'
+            schema = xmlschema.XMLSchema(xsd_abs, base_url=base)
+            schema.validate(xml_path)
+            return True, "XML validated against local XSDs (xmlschema)."
+
+        # else, if an xsd_path_or_url is provided, try using it (may be http(s))
+        if xsd_path_or_url:
+            # provide a downloader with timeout for remote fetches
+            # xmlschema will use urllib under the hood; set a global socket timeout as a pragmatic fallback
+            import socket
+            old_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(timeout)
+            try:
+                schema = xmlschema.XMLSchema(xsd_path_or_url)
+            finally:
+                socket.setdefaulttimeout(old_timeout)
+            schema.validate(xml_path)
+            return True, "XML validated against remote XSD (xmlschema)."
+
+        return False, "No XSD path/url or local_schema_dir provided; skipped validation."
+    except xmlschema.XMLSchemaException as e:
+        return False, f"Validation failed: {str(e)}"
+    except Exception as e:
+        # catch network timeouts, file not found, etc.
+        return False, f"Validation error: {str(e)}"
+
 
 def parse_compressor_stations(xml_path):
     tree = etree.parse(xml_path)

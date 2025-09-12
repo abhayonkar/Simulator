@@ -8,14 +8,50 @@
           "drive": "drive_1",
           "speedMin": 5760.0,
           "speedMax": 11600.0,
-          "coeffs": {}
+          "coeffs": {
+            "n_isoline_coeff_1": 0.0,
+            "n_isoline_coeff_2": 0.0,
+            "n_isoline_coeff_3": 0.0,
+            "n_isoline_coeff_4": 0.0,
+            "n_isoline_coeff_5": 0.0,
+            "n_isoline_coeff_6": 0.0,
+            "n_isoline_coeff_7": 0.0,
+            "n_isoline_coeff_8": 0.0,
+            "n_isoline_coeff_9": 0.0,
+            "eta_ad_isoline_coeff_1": 0.0,
+            "eta_ad_isoline_coeff_2": 0.0,
+            "eta_ad_isoline_coeff_3": 0.0,
+            "eta_ad_isoline_coeff_4": 0.0,
+            "eta_ad_isoline_coeff_5": 0.0,
+            "eta_ad_isoline_coeff_6": 0.0,
+            "eta_ad_isoline_coeff_7": 0.0,
+            "eta_ad_isoline_coeff_8": 0.0,
+            "eta_ad_isoline_coeff_9": 0.0,
+            "surgeline_coeff_1": 0.0,
+            "surgeline_coeff_2": 0.0,
+            "surgeline_coeff_3": 0.0,
+            "chokeline_coeff_1": 0.0,
+            "chokeline_coeff_2": 0.0,
+            "chokeline_coeff_3": 0.0
+          }
         }
       ],
       "drives": [
         {
           "id": "drive_1",
           "coeffs": {
-            "energy_rate_fun_coeff_1": 4001.75
+            "energy_rate_fun_coeff_1": 4001.75,
+            "energy_rate_fun_coeff_2": 0.0,
+            "energy_rate_fun_coeff_3": 0.0,
+            "power_fun_coeff_1": 0.0,
+            "power_fun_coeff_2": 0.0,
+            "power_fun_coeff_3": 0.0,
+            "power_fun_coeff_4": 0.0,
+            "power_fun_coeff_5": 0.0,
+            "power_fun_coeff_6": 0.0,
+            "power_fun_coeff_7": 0.0,
+            "power_fun_coeff_8": 0.0,
+            "power_fun_coeff_9": 0.0
           }
         }
       ]
@@ -28,14 +64,50 @@
           "drive": "drive_2",
           "speedMin": 5760.0,
           "speedMax": 11600.0,
-          "coeffs": {}
+          "coeffs": {
+            "n_isoline_coeff_1": 0.0,
+            "n_isoline_coeff_2": 0.0,
+            "n_isoline_coeff_3": 0.0,
+            "n_isoline_coeff_4": 0.0,
+            "n_isoline_coeff_5": 0.0,
+            "n_isoline_coeff_6": 0.0,
+            "n_isoline_coeff_7": 0.0,
+            "n_isoline_coeff_8": 0.0,
+            "n_isoline_coeff_9": 0.0,
+            "eta_ad_isoline_coeff_1": 0.0,
+            "eta_ad_isoline_coeff_2": 0.0,
+            "eta_ad_isoline_coeff_3": 0.0,
+            "eta_ad_isoline_coeff_4": 0.0,
+            "eta_ad_isoline_coeff_5": 0.0,
+            "eta_ad_isoline_coeff_6": 0.0,
+            "eta_ad_isoline_coeff_7": 0.0,
+            "eta_ad_isoline_coeff_8": 0.0,
+            "eta_ad_isoline_coeff_9": 0.0,
+            "surgeline_coeff_1": 0.0,
+            "surgeline_coeff_2": 0.0,
+            "surgeline_coeff_3": 0.0,
+            "chokeline_coeff_1": 0.0,
+            "chokeline_coeff_2": 0.0,
+            "chokeline_coeff_3": 0.0
+          }
         }
       ],
       "drives": [
         {
           "id": "drive_2",
           "coeffs": {
-            "energy_rate_fun_coeff_1": 4001.75
+            "energy_rate_fun_coeff_1": 4001.75,
+            "energy_rate_fun_coeff_2": 0.0,
+            "energy_rate_fun_coeff_3": 0.0,
+            "power_fun_coeff_1": 0.0,
+            "power_fun_coeff_2": 0.0,
+            "power_fun_coeff_3": 0.0,
+            "power_fun_coeff_4": 0.0,
+            "power_fun_coeff_5": 0.0,
+            "power_fun_coeff_6": 0.0,
+            "power_fun_coeff_7": 0.0,
+            "power_fun_coeff_8": 0.0,
+            "power_fun_coeff_9": 0.0
           }
         }
       ]

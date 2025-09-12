@@ -6,3 +6,4 @@ pandas
 scipy
 matplotlib
 python-dotenv
+xmlschema>=2.0
