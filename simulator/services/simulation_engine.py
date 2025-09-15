@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from ..models import (
     GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve, 
-    SimulationRun, SimulationDataReference
+    SimulationRun, SimulationTimeSeriesData
 )
-from .influxdb_service import get_influxdb_service
+from .postgres_tsdb_service import get_postgres_tsdb_service
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,8 @@ class SimulationEngine:
     def __init__(self):
         self.running = False
         self.simulation_thread = None
-        
+        self.tsdb_service = get_postgres_tsdb_service()
+
     def start_simulation(self, network_id, duration=600, time_step=1.0):
         """Start a new simulation run"""
         try:
@@ -292,8 +293,8 @@ class SimulationEngine:
                 node_data = self._collect_node_data(simulation_run.network)
                 pipe_data = self._collect_pipe_data(simulation_run.network)
                 
-                # Store simulation data to InfluxDB
-                self._write_to_influxdb(simulation_run, step, simulation_time, 
+                # Store simulation data to PostgreSQL TSDB
+                self._write_to_postgres(simulation_run, simulation_time, 
                                       sensor_data, plc_data, valve_data, 
                                       node_data, pipe_data)
                 
@@ -325,95 +326,53 @@ class SimulationEngine:
         
         finally:
             self.running = False
-            # Create summary reference to InfluxDB data
-            if step > 0:
-                self._create_influxdb_reference(simulation_run, step)
-    
-    def _write_to_influxdb(self, simulation_run, step, simulation_time, 
-                          sensor_data, plc_data, valve_data, node_data, pipe_data):
-        """Write simulation data to InfluxDB"""
-        try:
-            influxdb_service = get_influxdb_service()
-            timestamp = datetime.now(timezone.utc)
             
+    def _write_to_postgres(self, simulation_run, simulation_time, 
+                          sensor_data, plc_data, valve_data, node_data, pipe_data):
+        """Write simulation data to the PostgreSQL TSDB table"""
+        try:
             # Write sensor data
             for sensor_id, value in sensor_data.items():
-                sensor_type = sensor_id.split('_')[0]  # Extract sensor type from ID
-                location = sensor_id.replace(f'{sensor_type}_', '')  # Extract location
-                
-                influxdb_service.write_sensor_data(
-                    sensor_id=sensor_id,
-                    sensor_type=sensor_type,
-                    value=value,
-                    timestamp=timestamp,
-                    tags={
-                        'simulation_id': simulation_run.run_id,
-                        'location': location,
-                        'step': str(step)
-                    },
-                    fields={
-                        'simulation_time': simulation_time
-                    }
+                self.tsdb_service.write_data_point(
+                    simulation_run=simulation_run,
+                    timestamp=simulation_time,
+                    measurement_type='sensor_reading',
+                    object_id=sensor_id,
+                    data={'value': value}
                 )
             
             # Write PLC data
             for plc_id, outputs in plc_data.items():
-                plc_type = plc_id.split('_')[0]  # Extract PLC type
-                influxdb_service.write_plc_data(
-                    plc_id=plc_id,
-                    plc_type=plc_type,
-                    outputs=outputs,
-                    timestamp=timestamp,
-                    tags={
-                        'simulation_id': simulation_run.run_id,
-                        'step': str(step)
-                    }
+                self.tsdb_service.write_data_point(
+                    simulation_run=simulation_run,
+                    timestamp=simulation_time,
+                    measurement_type='plc_output',
+                    object_id=plc_id,
+                    data=outputs
                 )
             
-            # Write simulation data (nodes and pipes) as structured data
-            influxdb_service.write_simulation_data(
-                simulation_id=simulation_run.run_id,
-                step=step,
-                time_elapsed=simulation_time,
-                node_data=node_data,
-                pipe_data=pipe_data,
-                timestamp=timestamp
-            )
+            # Write node data
+            for node_id, data in node_data.items():
+                self.tsdb_service.write_data_point(
+                    simulation_run=simulation_run,
+                    timestamp=simulation_time,
+                    measurement_type='node_state',
+                    object_id=node_id,
+                    data=data
+                )
+                
+            # Write pipe data
+            for pipe_id, data in pipe_data.items():
+                self.tsdb_service.write_data_point(
+                    simulation_run=simulation_run,
+                    timestamp=simulation_time,
+                    measurement_type='pipe_state',
+                    object_id=pipe_id,
+                    data=data
+                )
             
         except Exception as e:
-            logger.error(f"Failed to write simulation data to InfluxDB: {e}")
-            # Continue simulation even if InfluxDB write fails
-    
-    def _create_influxdb_reference(self, simulation_run, total_steps):
-        """Create a reference record pointing to InfluxDB data"""
-        try:
-            # Calculate summary statistics if available
-            # This would typically query InfluxDB for aggregates
-            # For now, we'll create a basic reference
-            
-            SimulationDataReference.objects.create(
-                simulation_run=simulation_run,
-                step_start=0,
-                step_end=total_steps - 1,
-                influxdb_start_time=simulation_run.start_time,
-                influxdb_end_time=simulation_run.end_time or timezone.now(),
-                data_points_count=total_steps,
-                node_count=simulation_run.network.nodes.count(),
-                pipe_count=simulation_run.network.pipes.count(),
-                sensor_count=Sensor.objects.filter(
-                    node__network=simulation_run.network
-                ).count() + Sensor.objects.filter(
-                    pipe__network=simulation_run.network
-                ).count(),
-                plc_count=PLC.objects.filter(
-                    node__network=simulation_run.network
-                ).count()
-            )
-            
-            logger.info(f"Created InfluxDB reference for simulation {simulation_run.run_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to create InfluxDB reference: {e}")
+            logger.error(f"Failed to write simulation data to PostgreSQL: {e}")
     
     def _initialize_sensors(self, network):
         """Initialize sensors for the network"""

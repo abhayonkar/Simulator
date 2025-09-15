@@ -1,15 +1,14 @@
 # Gas Pipeline Digital Twin Simulator - Django Implementation
 # Core Dependencies for GasLib-40 Pipeline Simulation
-
 # Django Framework
 Django>=5.2.6
 
 # Database Dependencies
 psycopg2-binary>=2.9.9          # PostgreSQL database adapter
-influxdb-client>=1.44.0         # InfluxDB time-series database client
+dj-database-url                 # Helper for parsing database URLs
 python-decouple>=3.8            # Environment variable management
 
-# Scientific Computing Libraries  
+# Scientific Computing Libraries
 numpy>=2.3.2                    # Numerical computations for physics calculations
 lxml>=6.0.1                     # XML parsing for GasLib-40 network data
 xmlschema>=4.1.0                # XML schema validation for network files
@@ -18,11 +17,11 @@ xmlschema>=4.1.0                # XML schema validation for network files
 python-dotenv>=1.1.1            # Legacy environment variable management (use python-decouple instead)
 
 # Removed Dependencies (no longer needed):
+# - influxdb-client # Replaced with PostgreSQL time-series model
 # - Flask & Flask-SocketIO (replaced with Django)
 # - MATLAB/Simulink dependencies (pure Python implementation)
 # - OpenPLC dependencies (Python-native PLC logic)
 # - pandapipes (simplified physics in Python)
-# - psycopg2-binary (using SQLite for simplicity)
 # - pyModbus/pyModbusTCP (no industrial protocols needed)
 # - eventlet/python-socketio (standard HTTP only)
 # - matplotlib/plotly (basic web interface, can be added if needed)
@@ -30,13 +29,9 @@ python-dotenv>=1.1.1            # Legacy environment variable management (use py
 # - scipy (basic physics calculations only)
 # - pandas (Django ORM handles data management)
 # - requests (not needed for standalone simulator)
-
 # Installation Instructions:
 # pip install -r requirements.txt
-#
 # Database Setup:
 # python manage.py migrate
-#
 # Run Simulator:
 # python manage.py runserver 0.0.0.0:5000
-dj-database-url

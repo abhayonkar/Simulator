@@ -1,9 +1,9 @@
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import BTreeIndex, GinIndex
 import json
 from datetime import datetime
 from django.db import transaction
-from django.contrib.postgres.fields import ArrayField
-from django.contrib.postgres.indexes import BTreeIndex, GinIndex
 
 # GasLib-40 Network Models
 class GasNetwork(models.Model):
@@ -250,39 +250,29 @@ class SimulationRun(models.Model):
             BTreeIndex(fields=['status']),
         ]
 
-class SimulationDataReference(models.Model):
-    """Reference to time-series data stored in InfluxDB"""
-    simulation_run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name='data_references')
-    step_start = models.IntegerField()
-    step_end = models.IntegerField()
-    influxdb_start_time = models.DateTimeField()
-    influxdb_end_time = models.DateTimeField()
-    data_points_count = models.IntegerField(default=0)
-    
-    # Metadata about what's stored in InfluxDB
-    node_count = models.IntegerField(default=0)
-    pipe_count = models.IntegerField(default=0)
-    sensor_count = models.IntegerField(default=0)
-    plc_count = models.IntegerField(default=0)
-    
-    # Summary statistics (for quick access)
-    avg_pressure = models.FloatField(null=True, blank=True)
-    max_pressure = models.FloatField(null=True, blank=True)
-    min_pressure = models.FloatField(null=True, blank=True)
-    avg_flow = models.FloatField(null=True, blank=True)
-    max_flow = models.FloatField(null=True, blank=True)
-    
-    created = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['simulation_run', 'step_start']
-        indexes = [
-            BTreeIndex(fields=['simulation_run', 'step_start']),
-            BTreeIndex(fields=['influxdb_start_time', 'influxdb_end_time']),
-        ]
+# New Time-Series Data Model
+class SimulationTimeSeriesData(models.Model):
+    """
+    Stores time-series data for simulations in a structured format.
+    This replaces the need for InfluxDB.
+    """
+    simulation_run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name='timeseries_data')
+    timestamp = models.FloatField()
+    measurement_type = models.CharField(max_length=50) # e.g., 'sensor_reading', 'plc_output', 'node_state'
+    object_id = models.CharField(max_length=100) # e.g., 'pressure_node_1', 'plc_PLC_1'
+    data = models.JSONField(default=dict)
     
     def __str__(self):
-        return f"InfluxDB Data Reference: Steps {self.step_start}-{self.step_end} - {self.simulation_run.run_id}"
+        return f"{self.simulation_run.run_id} - {self.measurement_type} ({self.object_id}) at {self.timestamp}s"
+
+    class Meta:
+        ordering = ['timestamp']
+        indexes = [
+            BTreeIndex(fields=['simulation_run', 'timestamp']),
+            BTreeIndex(fields=['simulation_run', 'object_id']),
+            BTreeIndex(fields=['timestamp']),
+            BTreeIndex(fields=['measurement_type']),
+        ]
 
 # Legacy Run model for compatibility
 class Run(models.Model):
