@@ -45,6 +45,12 @@ class Node(models.Model):
     flow_max = models.FloatField(default=10000.0)  # 1000m³/hour
     current_flow = models.FloatField(default=0.0)  # 1000m³/hour
     
+    # --- Control Setpoints (For Manual Control) ---
+    # User-defined target pressure (for sources or pressure control nodes)
+    set_pressure = models.FloatField(default=50.0)
+    # User-defined target flow (for sinks or flow regulation nodes)
+    set_flow = models.FloatField(default=0.0) 
+    
     # Gas properties (for sources)
     gas_temperature = models.FloatField(default=20.0)  # Celsius
     calorific_value = models.FloatField(default=36.4543670654)  # MJ/m³
@@ -190,7 +196,12 @@ class Valve(models.Model):
     plc = models.ForeignKey(PLC, on_delete=models.SET_NULL, null=True, blank=True)
     
     # Valve state
-    position = models.FloatField(default=50.0)  # 0-100% open
+    position = models.FloatField(default=50.0)  # 0-100% open (current value)
+    
+    # --- Control Setpoint (For Manual Control/Override) ---
+    # User-defined position (0-100%). Use -1 to indicate PLC/Auto control.
+    set_position = models.FloatField(default=-1.0) 
+    
     is_operational = models.BooleanField(default=True)
     last_movement = models.DateTimeField(auto_now=True)
     
@@ -207,6 +218,38 @@ class Valve(models.Model):
             BTreeIndex(fields=['valve_type']),
             BTreeIndex(fields=['is_operational']),
         ]
+
+# Compressor Models
+class Compressor(models.Model):
+    """Represents compressor units in the pipeline system"""
+    COMPRESSOR_STATUS_CHOICES = [
+        ('OFF', 'Off'),
+        ('STARTING', 'Starting'),
+        ('RUNNING', 'Running'),
+        ('STOPPING', 'Stopping'),
+        ('FAULT', 'Fault'),
+    ]
+
+    compressor_id = models.CharField(max_length=50, unique=True)
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='compressors')
+    plc = models.ForeignKey(PLC, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # Current state
+    status = models.CharField(max_length=20, choices=COMPRESSOR_STATUS_CHOICES, default='OFF')
+    speed = models.FloatField(default=0.0) # Current RPM
+    
+    # --- Control Setpoints (For Manual Control/Override) ---
+    # User-defined target speed. Use -1 to indicate PLC/Auto control.
+    set_speed = models.FloatField(default=-1.0) 
+    # User-defined ON/OFF command. Use 'AUTO' to indicate PLC control.
+    set_command = models.CharField(max_length=10, default='AUTO', 
+                                    choices=[('AUTO', 'Auto'), ('ON', 'On'), ('OFF', 'Off')]) 
+
+    max_speed = models.FloatField(default=15000.0)
+    max_pressure_ratio = models.FloatField(default=1.5)
+    
+    def __str__(self):
+        return f"{self.compressor_id} ({self.get_status_display()}) @ {self.node.node_id}"
 
 # Simulation Models
 class SimulationRun(models.Model):
@@ -250,7 +293,7 @@ class SimulationRun(models.Model):
             BTreeIndex(fields=['status']),
         ]
 
-# New Time-Series Data Model
+# New Time-Series Data Model (replaces old SimulationData)
 class SimulationTimeSeriesData(models.Model):
     """
     Stores time-series data for simulations in a structured format.

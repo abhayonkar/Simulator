@@ -24,4 +24,10 @@ urlpatterns = [
     path('api/alarms/<int:alarm_id>/acknowledge/', views.acknowledge_alarm, name='acknowledge_alarm'),
     path('api/plcs/status/', views.plc_status, name='plc_status'),
     path('api/sensors/readings/', views.sensor_readings, name='sensor_readings'),
+    
+    # --- New Direct Control Endpoints ---
+    path('api/control/valve/<str:valve_id>/', views.control_valve, name='control_valve'),
+    path('api/control/valve/<str:valve_id>/auto/', views.control_valve_auto, name='control_valve_auto'),
+    path('api/control/compressor/<str:compressor_id>/', views.control_compressor, name='control_compressor'),
+    path('api/control/node/<str:node_id>/', views.control_node, name='control_node'), # For Source/Sink setpoints
 ]

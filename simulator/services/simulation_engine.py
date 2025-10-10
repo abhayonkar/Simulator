@@ -6,8 +6,9 @@ import math
 import threading
 from datetime import datetime, timedelta
 from django.utils import timezone
+from django.db import transaction # Import transaction for safe bulk operations
 from ..models import (
-    GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve, 
+    GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve, Compressor,
     SimulationRun, SimulationTimeSeriesData
 )
 from .postgres_tsdb_service import get_postgres_tsdb_service
@@ -53,8 +54,10 @@ class PLCSimulator:
         node_id = self.plc.node.node_id
         current_pressure = sensor_data.get(f'pressure_{node_id}', 50.0)
         
+        # Use Node's set_pressure as setpoint (manual override potential)
+        setpoint = self.plc.node.set_pressure
+        
         # PID parameters
-        setpoint = 50.0
         kp, ki, kd = 1.0, 0.1, 0.01
         
         # PID calculation
@@ -63,16 +66,18 @@ class PLCSimulator:
         derivative_error = (error - self.last_error) / 0.1
         
         pid_output = kp * error + ki * self.integral_error + kd * derivative_error
-        valve_position = max(0, min(100, 50 + pid_output))
+        # The valve position suggested by the PLC (0-100%)
+        plc_valve_position = max(0, min(100, 50 + pid_output)) 
         
         self.last_error = error
         
         # Safety checks
-        if current_pressure > 80.0:
-            self._create_alarm('HIGH_PRESSURE', 'HIGH', f'Pressure {current_pressure:.1f} bar exceeds limit')
+        if current_pressure > self.plc.node.pressure_max * 0.9:
+            self._create_alarm('HIGH_PRESSURE', 'HIGH', f'Pressure {current_pressure:.1f} bar exceeds warning limit')
         
         return {
-            'CONTROL_VALVE_POSITION': valve_position,
+            # PLC outputs a suggested position
+            'CONTROL_VALVE_POSITION': plc_valve_position,
             'PRESSURE_IN_TOLERANCE': abs(error) <= 2.0,
             'PID_OUTPUT': pid_output
         }
@@ -82,16 +87,17 @@ class PLCSimulator:
         node_id = self.plc.node.node_id
         current_flow = sensor_data.get(f'flow_{node_id}', 100.0)
         
-        # Simple flow control
-        target_flow = 100.0
+        # Use Node's set_flow as target flow (manual override potential)
+        target_flow = self.plc.node.set_flow 
+        
         flow_error = target_flow - current_flow
         
         # Adjust valve position based on flow error
         valve_adjustment = flow_error * 0.5
-        valve_position = max(0, min(100, 50 + valve_adjustment))
+        plc_valve_position = max(0, min(100, 50 + valve_adjustment))
         
         return {
-            'FLOW_CONTROL_VALVE': valve_position,
+            'FLOW_CONTROL_VALVE': plc_valve_position,
             'FLOW_IN_RANGE': abs(flow_error) <= 10.0,
             'FLOW_ERROR': flow_error
         }
@@ -101,27 +107,50 @@ class PLCSimulator:
         node_id = self.plc.node.node_id
         pressure = sensor_data.get(f'pressure_{node_id}', 50.0)
         
-        # Start compressor if pressure is low
-        compressor_running = pressure < 45.0
-        compressor_speed = 1500 if compressor_running else 0  # RPM
+        # Simple logic: start compressor if pressure is low
+        compressor_start_pressure = 45.0
+        compressor_stop_pressure = 55.0
         
-        if compressor_running:
-            self._create_alarm('COMPRESSOR_START', 'LOW', 'Compressor started due to low pressure')
+        compressor_to_control = Compressor.objects.filter(node=self.plc.node).first()
         
+        if compressor_to_control and compressor_to_control.set_command == 'AUTO':
+            # Auto logic based on pressure
+            if pressure < compressor_start_pressure:
+                command = 'ON'
+                speed = 10000.0 # High speed command
+            elif pressure > compressor_stop_pressure:
+                command = 'OFF'
+                speed = 0.0
+            else:
+                # Keep current state if in deadband
+                command = compressor_to_control.status 
+                speed = compressor_to_control.speed
+        else:
+            # Manual override is active, PLC outputs follow the manual command
+            command = compressor_to_control.set_command if compressor_to_control else 'OFF'
+            speed = compressor_to_control.set_speed if compressor_to_control and compressor_to_control.set_speed >= 0 else 0.0
+        
+        # The outputs here instruct the update_compressors function what to do
         return {
-            'COMPRESSOR_RUNNING': compressor_running,
-            'COMPRESSOR_SPEED': compressor_speed,
-            'SUCTION_VALVE': compressor_running,
-            'DISCHARGE_VALVE': compressor_running
+            'COMPRESSOR_COMMAND': command,
+            'COMPRESSOR_TARGET_SPEED': speed,
+            'SUCTION_VALVE': command == 'ON' or command == 'RUNNING',
+            'DISCHARGE_VALVE': command == 'ON' or command == 'RUNNING'
         }
     
     def _valve_control_logic(self, sensor_data, simulation_time):
-        """Valve control PLC logic"""
-        # Simple valve control based on pressure differential
+        """Valve control PLC logic (Placeholder for complex strategies)"""
+        # This PLC just outputs arbitrary positions for demonstration
         positions = {}
-        for i in range(3):  # Control up to 3 valves
-            valve_id = f'VALVE_{i+1}'
-            positions[valve_id] = 50.0 + random.gauss(0, 5)  # Small variations
+        for valve in Valve.objects.filter(plc=self.plc):
+            # If the valve is under PLC control (set_position = -1.0)
+            if valve.set_position < 0:
+                # Calculate new position (simple random movement)
+                new_position = valve.position + random.uniform(-1.0, 1.0)
+                positions[valve.valve_id] = max(0, min(100, new_position))
+            else:
+                # If set_position is manual, PLC outputs the current manual setpoint
+                positions[valve.valve_id] = valve.set_position
         
         return positions
     
@@ -153,8 +182,7 @@ class PLCSimulator:
     
     def _leak_detection_logic(self, sensor_data, simulation_time):
         """Leak detection PLC logic"""
-        # Simulate occasional leak detection
-        leak_detected = random.random() < 0.001  # 0.1% chance per scan
+        leak_detected = random.random() < 0.0001 # Reduced chance for demo
         
         if leak_detected:
             self._create_alarm('GAS_LEAK', 'CRITICAL', 'Gas leak detected!')
@@ -169,11 +197,9 @@ class PLCSimulator:
         node_id = self.plc.node.node_id
         temperature = sensor_data.get(f'temperature_{node_id}', 20.0)
         
-        # Simple temperature control
         target_temp = 25.0
         temp_error = target_temp - temperature
         
-        # Heating/cooling control
         heating = temp_error > 2.0
         cooling = temp_error < -2.0
         
@@ -186,9 +212,8 @@ class PLCSimulator:
     
     def _emergency_shutdown_logic(self, sensor_data, simulation_time):
         """Emergency shutdown PLC logic"""
-        # Monitor critical parameters
-        pressure_ok = all(p <= 80.0 for p in sensor_data.values() if 'pressure' in str(p))
-        temperature_ok = all(t <= 70.0 for t in sensor_data.values() if 'temperature' in str(t))
+        pressure_ok = all(s.current_value <= 80.0 for s in Sensor.objects.filter(sensor_type='pressure'))
+        temperature_ok = all(s.current_value <= 70.0 for s in Sensor.objects.filter(sensor_type='temperature'))
         
         emergency_stop = not (pressure_ok and temperature_ok)
         
@@ -238,10 +263,12 @@ class SimulationEngine:
                 start_time=timezone.now()
             )
             
-            # Initialize sensors and PLCs
-            self._initialize_sensors(network)
-            self._initialize_plcs(network)
-            self._initialize_valves(network)
+            with transaction.atomic():
+                # Initialize components
+                self._initialize_sensors(network)
+                self._initialize_plcs(network)
+                self._initialize_valves(network)
+                self._initialize_compressors(network) # New initialization
             
             # Start simulation in separate thread
             self.simulation_thread = threading.Thread(
@@ -280,14 +307,17 @@ class SimulationEngine:
                 # Update sensor readings
                 sensor_data = self._update_sensors(simulation_run.network, simulation_time)
                 
-                # Update physics simulation
-                self._update_physics(simulation_run.network, sensor_data, simulation_time)
-                
                 # Execute PLC scans
                 plc_data = self._execute_plcs(simulation_run.network, sensor_data, simulation_time)
                 
-                # Update valve positions
+                # Update valve positions (uses PLC data or manual override)
                 valve_data = self._update_valves(simulation_run.network, plc_data, simulation_time)
+                
+                # Update compressor states (uses PLC data or manual override)
+                compressor_data = self._update_compressors(simulation_run.network, plc_data, simulation_time) # New update
+                
+                # Update physics simulation (incorporates valve/compressor changes and manual node setpoints)
+                self._update_physics(simulation_run.network, sensor_data, simulation_time)
                 
                 # Collect node and pipe data
                 node_data = self._collect_node_data(simulation_run.network)
@@ -296,9 +326,9 @@ class SimulationEngine:
                 # Store simulation data to PostgreSQL TSDB
                 self._write_to_postgres(simulation_run, simulation_time, 
                                       sensor_data, plc_data, valve_data, 
-                                      node_data, pipe_data)
+                                      node_data, pipe_data, compressor_data)
                 
-                # Log progress every 60 seconds
+                # Log progress every 60 steps
                 if step % 60 == 0:
                     logger.info(f"Simulation {simulation_run.run_id}: Step {step}, Time {simulation_time:.1f}s")
                 
@@ -309,7 +339,7 @@ class SimulationEngine:
                 
                 step += 1
             
-            # Complete simulation
+            # Finalize simulation
             simulation_run.status = 'COMPLETED'
             simulation_run.end_time = timezone.now()
             simulation_run.total_steps = step
@@ -328,54 +358,61 @@ class SimulationEngine:
             self.running = False
             
     def _write_to_postgres(self, simulation_run, simulation_time, 
-                          sensor_data, plc_data, valve_data, node_data, pipe_data):
+                          sensor_data, plc_data, valve_data, node_data, pipe_data, compressor_data):
         """Write simulation data to the PostgreSQL TSDB table"""
         try:
-            # Write sensor data
+            data_points = []
+            
+            # Sensor data
             for sensor_id, value in sensor_data.items():
-                self.tsdb_service.write_data_point(
-                    simulation_run=simulation_run,
-                    timestamp=simulation_time,
-                    measurement_type='sensor_reading',
-                    object_id=sensor_id,
+                data_points.append(SimulationTimeSeriesData(
+                    simulation_run=simulation_run, timestamp=simulation_time, 
+                    measurement_type='sensor_reading', object_id=sensor_id, 
                     data={'value': value}
-                )
+                ))
             
-            # Write PLC data
+            # PLC data
             for plc_id, outputs in plc_data.items():
-                self.tsdb_service.write_data_point(
-                    simulation_run=simulation_run,
-                    timestamp=simulation_time,
-                    measurement_type='plc_output',
-                    object_id=plc_id,
+                data_points.append(SimulationTimeSeriesData(
+                    simulation_run=simulation_run, timestamp=simulation_time, 
+                    measurement_type='plc_output', object_id=plc_id, 
                     data=outputs
-                )
+                ))
             
-            # Write node data
+            # Node data
             for node_id, data in node_data.items():
-                self.tsdb_service.write_data_point(
-                    simulation_run=simulation_run,
-                    timestamp=simulation_time,
-                    measurement_type='node_state',
-                    object_id=node_id,
+                data_points.append(SimulationTimeSeriesData(
+                    simulation_run=simulation_run, timestamp=simulation_time, 
+                    measurement_type='node_state', object_id=node_id, 
                     data=data
-                )
+                ))
                 
-            # Write pipe data
+            # Pipe data
             for pipe_id, data in pipe_data.items():
-                self.tsdb_service.write_data_point(
-                    simulation_run=simulation_run,
-                    timestamp=simulation_time,
-                    measurement_type='pipe_state',
-                    object_id=pipe_id,
+                data_points.append(SimulationTimeSeriesData(
+                    simulation_run=simulation_run, timestamp=simulation_time, 
+                    measurement_type='pipe_state', object_id=pipe_id, 
                     data=data
-                )
+                ))
+            
+            # Compressor data
+            for comp_id, data in compressor_data.items():
+                data_points.append(SimulationTimeSeriesData(
+                    simulation_run=simulation_run, timestamp=simulation_time,
+                    measurement_type='compressor_state', object_id=comp_id,
+                    data=data
+                ))
+
+            # Bulk create for performance
+            SimulationTimeSeriesData.objects.bulk_create(data_points)
             
         except Exception as e:
             logger.error(f"Failed to write simulation data to PostgreSQL: {e}")
     
     def _initialize_sensors(self, network):
         """Initialize sensors for the network"""
+        # ... (Sensor initialization remains mostly the same, ensuring flow setpoints are initialized on Node)
+        
         # Create sensors for all nodes
         for node in network.nodes.all():
             # Pressure sensor
@@ -417,7 +454,12 @@ class SimulationEngine:
                         'max_value': node.flow_max
                     }
                 )
-        
+            
+            # Ensure node setpoints reflect initial state (or default)
+            node.set_pressure = node.current_pressure
+            node.set_flow = node.current_flow
+            node.save()
+
         # Create flow sensors for pipes
         for pipe in network.pipes.all():
             Sensor.objects.get_or_create(
@@ -457,11 +499,38 @@ class SimulationEngine:
                         'parameters': self._get_plc_parameters(plc_type)
                     }
                 )
-    
+
+    def _initialize_compressors(self, network):
+        """Initialize compressor models based on nodes that should have compressors (e.g., those managed by COMPRESSOR_MANAGEMENT PLCs)"""
+        # Find nodes that are likely compressor stations (innode or nodes feeding innode/compressor station in GasLib)
+        compressor_nodes = Node.objects.filter(node_id__in=['innode_6', 'sink_11', 'sink_19', 'source_3', 'source_2', 'sink_3'])
+        
+        for i, node in enumerate(compressor_nodes):
+            comp_id = f'COMP_{node.node_id}'
+            
+            # Try to link to a relevant PLC
+            plc = PLC.objects.filter(plc_type='COMPRESSOR_MANAGEMENT', node=node).first()
+            
+            Compressor.objects.get_or_create(
+                compressor_id=comp_id,
+                defaults={
+                    'node': node,
+                    'plc': plc,
+                    'status': 'OFF',
+                    'speed': 0.0,
+                    'set_speed': -1.0, # Auto control by default
+                    'set_command': 'AUTO' # Auto control by default
+                }
+            )
+            
     def _initialize_valves(self, network):
         """Initialize valves on pipes"""
         for pipe in network.pipes.all():
             valve_id = f'valve_{pipe.pipe_id}'
+            
+            # Try to link valves to a VALVE_CONTROL PLC (or other relevant PLC)
+            # Simple heuristic: link valve to a PLC at its from_node if one exists
+            plc = PLC.objects.filter(node=pipe.from_node).first()
             
             Valve.objects.get_or_create(
                 valve_id=valve_id,
@@ -469,9 +538,11 @@ class SimulationEngine:
                     'valve_type': 'CONTROL',
                     'pipe': pipe,
                     'position': 50.0,
+                    'set_position': -1.0, # Auto control by default
                     'is_operational': True,
                     'max_pressure': 100.0,
-                    'flow_coefficient': 1.0
+                    'flow_coefficient': 1.0,
+                    'plc': plc
                 }
             )
     
@@ -507,9 +578,11 @@ class SimulationEngine:
             
             elif sensor.sensor_type == 'flow':
                 if sensor.node:
-                    base_value = sensor.node.current_flow
+                    # Nodes (Sources/Sinks) expose their set flow in 1000m³/h (from set_flow)
+                    base_value = sensor.node.set_flow 
                 elif sensor.pipe:
-                    base_value = sensor.pipe.current_flow * 3600  # Convert to m³/h
+                    # Pipes expose their internal m³/s flow
+                    base_value = pipe.current_flow * 3600  # Convert m³/s to m³/h
                 else:
                     base_value = 100.0
                 
@@ -522,32 +595,43 @@ class SimulationEngine:
         return sensor_data
     
     def _update_physics(self, network, sensor_data, simulation_time):
-        """Update physics simulation"""
-        # Simple physics update - pressure and flow calculations
+        """Update physics simulation - incorporates valve/compressor effects and manual node setpoints"""
+        
+        # 1. Apply Node Setpoints (Pressure and Flow)
         for node in network.nodes.all():
             if node.node_type == 'source':
-                # Sources maintain pressure with small variations
-                node.current_pressure = node.pressure_max * 0.8 + random.gauss(0, 1.0)
-                node.current_flow = 100.0 + random.gauss(0, 10.0)
+                # Sources enforce the user's set pressure/flow (user sets one, system calculates the other)
+                node.current_pressure = node.set_pressure + random.gauss(0, 0.5)
+                # The flow will be dynamically calculated by the connected pipes, but we use the set flow as a base
+                if node.set_flow > 0:
+                    node.current_flow = node.set_flow
+                else:
+                    node.current_flow = 100.0 + random.gauss(0, 10.0)
             
             elif node.node_type == 'sink':
-                # Sinks consume gas
-                node.current_pressure = node.pressure_min * 1.5 + random.gauss(0, 1.0)
-                node.current_flow = 80.0 + random.gauss(0, 8.0)
+                # Sinks regulate their flow based on set_flow
+                node.current_flow = node.set_flow
+                node.current_pressure = node.pressure_min * 1.5 + random.gauss(0, 0.5)
             
-            else:  # innode
-                # Junctions have intermediate pressures
-                node.current_pressure = 50.0 + random.gauss(0, 2.0)
+            else:  # innode (Junctions)
+                # Junctions pressure is calculated based on flow dynamics (simplification: average of connected pipes)
+                node.current_pressure = 50.0 + random.gauss(0, 1.0) 
             
             node.save()
-        
-        # Update pipe flows
+
+        # 2. Update Pipe Flows (incorporates Valve positions)
         for pipe in network.pipes.all():
-            # Simple flow based on pressure difference
+            valve = pipe.valves.first()
+            valve_openness = valve.position / 100.0 if valve else 1.0
+
+            # Simplified flow calculation incorporating valve restriction
             dp = pipe.from_node.current_pressure - pipe.to_node.current_pressure
-            pipe.current_flow = max(0, dp * 2.0 + random.gauss(0, 0.5))
+            
+            # The flow is proportional to pressure difference and valve openness
+            base_flow = dp * 2.0 * valve_openness
+            pipe.current_flow = max(0, base_flow + random.gauss(0, 0.1))
             pipe.save()
-    
+
     def _execute_plcs(self, network, sensor_data, simulation_time):
         """Execute all PLC scans"""
         plc_data = {}
@@ -558,6 +642,7 @@ class SimulationEngine:
             
             # Update PLC outputs
             plc.outputs = outputs
+            plc.last_scan = timezone.now() # Update last scan time
             plc.save()
             
             plc_data[plc.plc_id] = outputs
@@ -565,26 +650,117 @@ class SimulationEngine:
         return plc_data
     
     def _update_valves(self, network, plc_data, simulation_time):
-        """Update valve positions based on PLC outputs"""
+        """Update valve positions based on PLC outputs OR manual setpoints"""
         valve_data = {}
         
         for valve in Valve.objects.filter(pipe__network=network, is_operational=True):
-            # Update valve position based on PLC control or default behavior
-            if valve.plc:
-                # Get position from PLC output
-                control_key = f'CONTROL_VALVE_POSITION'
-                if control_key in plc_data.get(valve.plc.plc_id, {}):
-                    valve.position = plc_data[valve.plc.plc_id][control_key]
-            else:
-                # Small random variations if no PLC control
-                valve.position += random.gauss(0, 1.0)
-                valve.position = max(0, min(100, valve.position))
             
-            valve.save()
-            valve_data[valve.valve_id] = valve.position
+            if valve.set_position >= 0:
+                # MANUAL OVERRIDE: Directly set the valve position to the setpoint
+                new_position = valve.set_position
+                control_source = 'Manual'
+            
+            elif valve.plc:
+                # PLC CONTROL: Use PLC output if available
+                plc_output_key = 'CONTROL_VALVE_POSITION' # Used by PRESSURE_CONTROL PLC
+                plc_flow_key = 'FLOW_CONTROL_VALVE'       # Used by FLOW_REGULATION PLC
+                
+                # Check for relevant PLC outputs
+                plc_outputs = plc_data.get(valve.plc.plc_id, {})
+                
+                if plc_output_key in plc_outputs:
+                    new_position = plc_outputs[plc_output_key]
+                    control_source = 'PLC (Pressure)'
+                elif plc_flow_key in plc_outputs:
+                    new_position = plc_outputs[plc_flow_key]
+                    control_source = 'PLC (Flow)'
+                else:
+                    new_position = valve.position # Maintain previous position
+                    control_source = 'No Control'
+            
+            else:
+                # NO CONTROL/DEFAULT: Apply small random change
+                new_position = valve.position + random.uniform(-0.1, 0.1)
+                control_source = 'Default'
+
+            # Apply limits and save
+            new_position = max(0.0, min(100.0, new_position))
+            
+            if abs(valve.position - new_position) > 0.1: # Only save if change is significant
+                valve.position = new_position
+                valve.last_movement = timezone.now()
+                valve.save()
+            
+            valve_data[valve.valve_id] = {'position': valve.position, 'control_source': control_source}
         
         return valve_data
-    
+
+    def _update_compressors(self, network, plc_data, simulation_time):
+        """Update compressor states based on PLC outputs OR manual setpoints"""
+        compressor_data = {}
+        
+        for compressor in Compressor.objects.filter(node__network=network):
+            
+            # 1. Determine target state based on override/auto
+            if compressor.set_command != 'AUTO':
+                # MANUAL COMMAND OVERRIDE
+                target_status = compressor.set_command
+                target_speed = compressor.set_speed if compressor.set_speed >= 0 else 0.0
+                control_source = 'Manual'
+            
+            elif compressor.plc:
+                # PLC CONTROL
+                plc_outputs = plc_data.get(compressor.plc.plc_id, {})
+                target_status = 'ON' if plc_outputs.get('COMPRESSOR_COMMAND') == 'ON' else 'OFF'
+                target_speed = plc_outputs.get('COMPRESSOR_TARGET_SPEED', 0.0)
+                control_source = 'PLC'
+            
+            else:
+                # DEFAULT/OFF
+                target_status = 'OFF'
+                target_speed = 0.0
+                control_source = 'Default'
+
+            # 2. Apply dynamics to the current state
+            new_status = compressor.status
+            new_speed = compressor.speed
+            
+            # Simple state machine logic
+            if target_status == 'ON' and new_status == 'OFF':
+                new_status = 'STARTING'
+            elif target_status == 'OFF' and new_status == 'RUNNING':
+                new_status = 'STOPPING'
+            elif new_status == 'STARTING' and new_speed >= 0.9 * target_speed and target_speed > 0:
+                new_status = 'RUNNING'
+            elif new_status == 'STOPPING' and new_speed <= 0.1 * compressor.max_speed:
+                 new_status = 'OFF'
+            
+            # Simple speed ramping
+            speed_change_rate = 1000.0 # RPM per second (simplified)
+            speed_diff = target_speed - new_speed
+            
+            if abs(speed_diff) > speed_change_rate * simulation_run.time_step:
+                new_speed += math.copysign(speed_change_rate * simulation_run.time_step, speed_diff)
+            else:
+                new_speed = target_speed
+
+            # Apply limits and save
+            new_speed = max(0.0, min(compressor.max_speed, new_speed))
+            
+            if new_status != compressor.status or abs(new_speed - compressor.speed) > 100:
+                compressor.status = new_status
+                compressor.speed = new_speed
+                compressor.save()
+            
+            compressor_data[compressor.compressor_id] = {
+                'status': new_status, 
+                'speed': new_speed, 
+                'target_speed': target_speed,
+                'control_source': control_source
+            }
+        
+        return compressor_data
+
     def _collect_node_data(self, network):
         """Collect current node states"""
         node_data = {}
@@ -593,7 +769,9 @@ class SimulationEngine:
                 'pressure': node.current_pressure,
                 'flow': node.current_flow,
                 'temperature': node.gas_temperature,
-                'type': node.node_type
+                'type': node.node_type,
+                'set_pressure': node.set_pressure,
+                'set_flow': node.set_flow,
             }
         return node_data
     

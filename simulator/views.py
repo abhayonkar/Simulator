@@ -11,7 +11,7 @@ import os
 import logging
 
 from .models import (
-    Run, GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve,
+    Run, GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve, Compressor,
     SimulationRun, SimulationTimeSeriesData
 )
 from .services.gaslib_parser import GasLibParser
@@ -31,6 +31,8 @@ def index(request):
     pipe_count = Pipe.objects.count()
     plc_count = PLC.objects.count()
     sensor_count = Sensor.objects.count()
+    valve_count = Valve.objects.count() # New count
+    compressor_count = Compressor.objects.count() # New count
     simulation_count = SimulationRun.objects.count()
     active_alarms = PLCAlarm.objects.filter(acknowledged=False).count()
     
@@ -40,6 +42,11 @@ def index(request):
     # Get networks
     networks = GasNetwork.objects.all()
     
+    # Get control components for the new section
+    valves = Valve.objects.all()
+    compressors = Compressor.objects.all()
+    nodes = Node.objects.filter(node_type__in=['source', 'sink']).all()
+    
     context = {
         'title': 'Gas Pipeline Simulator - GasLib-40',
         'network_count': network_count,
@@ -47,11 +54,18 @@ def index(request):
         'pipe_count': pipe_count,
         'plc_count': plc_count,
         'sensor_count': sensor_count,
+        'valve_count': valve_count, # Pass new count
+        'compressor_count': compressor_count, # Pass new count
         'simulation_count': simulation_count,
         'active_alarms': active_alarms,
         'recent_simulations': recent_simulations,
         'networks': networks,
         'total_runs': Run.objects.count(),  # Legacy compatibility
+        
+        # New control data
+        'valves': valves,
+        'compressors': compressors,
+        'control_nodes': nodes,
     }
     
     return render(request, 'simulator/index.html', context)
@@ -80,6 +94,7 @@ def load_gaslib_network(request):
         with transaction.atomic():
             network = parser.parse_and_create_network()
         
+        # NOTE: Sensors, PLCs, Valves, Compressors are initialized when simulation starts.
         logger.info(f"Successfully loaded GasLib-40 network: {network.name}")
         
         return JsonResponse({
@@ -108,7 +123,6 @@ def start_simulation(request):
         # Get network
         network_id = data.get('network_id')
         if not network_id:
-            # Use first available network
             network = GasNetwork.objects.first()
             if not network:
                 return JsonResponse({
@@ -118,11 +132,9 @@ def start_simulation(request):
         else:
             network = get_object_or_404(GasNetwork, id=network_id)
         
-        # Simulation parameters
         duration = data.get('duration', 600)  # seconds
         time_step = data.get('time_step', 1.0)  # seconds
         
-        # Validate parameters
         if duration <= 0 or duration > 3600:  # Max 1 hour
             return JsonResponse({
                 'status': 'error',
@@ -158,7 +170,7 @@ def start_simulation(request):
             'network': network.name,
             'duration': duration,
             'time_step': time_step,
-            'message': 'Simulation started successfully'
+            'message': 'Simulation started successfully. Components initialized.'
         })
         
     except Exception as e:
@@ -175,7 +187,6 @@ def stop_simulation(request):
     try:
         simulation_engine.stop_simulation()
         
-        # Update any running simulations to stopped
         running_sims = SimulationRun.objects.filter(status='RUNNING')
         running_sims.update(status='STOPPED')
         
@@ -194,15 +205,15 @@ def stop_simulation(request):
 def simulation_status(request):
     """Get simulation status"""
     try:
-        # Get latest simulation
         latest_simulation = SimulationRun.objects.order_by('-created').first()
         
-        # Get system statistics
         total_networks = GasNetwork.objects.count()
         total_nodes = Node.objects.count()
         total_pipes = Pipe.objects.count()
         total_sensors = Sensor.objects.count()
         total_plcs = PLC.objects.count()
+        total_valves = Valve.objects.count() # New count
+        total_compressors = Compressor.objects.count() # New count
         active_alarms = PLCAlarm.objects.filter(acknowledged=False).count()
         
         response_data = {
@@ -215,6 +226,8 @@ def simulation_status(request):
             'pipes': total_pipes,
             'sensors': total_sensors,
             'plcs': total_plcs,
+            'valves': total_valves, # Add to status
+            'compressors': total_compressors, # Add to status
             'active_alarms': active_alarms,
             'engine_running': simulation_engine.running
         }
@@ -239,7 +252,168 @@ def simulation_status(request):
             'status': 'error',
             'message': f'Error getting status: {str(e)}'
         })
+        
+# --- New Control Endpoints ---
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def control_valve(request, valve_id):
+    """Set the control position for a specific valve (manual override)"""
+    try:
+        data = json.loads(request.body)
+        position = data.get('position')
+        
+        if position is None or not 0 <= position <= 100:
+            return JsonResponse({'status': 'error', 'message': 'Invalid position. Must be between 0 and 100.'}, status=400)
+        
+        valve = get_object_or_404(Valve, valve_id=valve_id)
+        
+        # Set set_position to enable manual override. -1.0 means PLC control.
+        valve.set_position = float(position)
+        valve.save()
+        
+        logger.info(f"Manual control set for Valve {valve_id}: Position {position}%")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Valve {valve_id} position set to {position}%. Control is now Manual.',
+            'new_setpoint': valve.set_position
+        })
+        
+    except Valve.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': f'Valve {valve_id} not found.'}, status=404)
+    except Exception as e:
+        logger.error(f"Error controlling valve {valve_id}: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def control_valve_auto(request, valve_id):
+    """Set the control mode for a specific valve back to Auto (PLC)"""
+    try:
+        valve = get_object_or_404(Valve, valve_id=valve_id)
+        
+        # Setting set_position to -1.0 disables manual override, reverting to PLC control.
+        valve.set_position = -1.0
+        valve.save()
+        
+        logger.info(f"Auto control enabled for Valve {valve_id}.")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Valve {valve_id} control set to Auto (PLC).',
+            'new_setpoint': valve.set_position
+        })
+        
+    except Valve.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': f'Valve {valve_id} not found.'}, status=404)
+    except Exception as e:
+        logger.error(f"Error setting valve {valve_id} to auto: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def control_compressor(request, compressor_id):
+    """Set the command and speed for a specific compressor (manual override)"""
+    try:
+        data = json.loads(request.body)
+        command = data.get('command') # ON, OFF, AUTO
+        speed = data.get('speed') # Target speed (RPM)
+        
+        compressor = get_object_or_404(Compressor, compressor_id=compressor_id)
+        
+        if command not in ['ON', 'OFF', 'AUTO']:
+             return JsonResponse({'status': 'error', 'message': 'Invalid command. Must be ON, OFF, or AUTO.'}, status=400)
+        
+        # Only validate speed if not AUTO and command is ON
+        if command == 'ON' and speed is None:
+            return JsonResponse({'status': 'error', 'message': 'Speed must be provided when command is ON.'}, status=400)
+
+        # Set the manual control fields
+        compressor.set_command = command
+        
+        if command == 'AUTO':
+             # Set speed back to auto signal
+             compressor.set_speed = -1.0
+             message = f'Compressor {compressor_id} control set to Auto (PLC).'
+        else:
+             # Manual control: set target speed if provided and valid
+             if speed is not None and 0 <= speed <= compressor.max_speed:
+                 compressor.set_speed = float(speed)
+                 message = f'Compressor {compressor_id} command set to {command} with speed {speed} RPM. Control is Manual.'
+             elif command == 'OFF':
+                 compressor.set_speed = 0.0
+                 message = f'Compressor {compressor_id} command set to OFF. Control is Manual.'
+             else:
+                 return JsonResponse({'status': 'error', 'message': f'Invalid speed. Must be between 0 and {compressor.max_speed}.'}, status=400)
+                 
+
+        compressor.save()
+        logger.info(message)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': message,
+            'new_command': compressor.set_command,
+            'new_speed_setpoint': compressor.set_speed
+        })
+        
+    except Compressor.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': f'Compressor {compressor_id} not found.'}, status=404)
+    except Exception as e:
+        logger.error(f"Error controlling compressor {compressor_id}: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def control_node(request, node_id):
+    """Set the target pressure or flow for a source/sink node (manual override)"""
+    try:
+        data = json.loads(request.body)
+        set_pressure = data.get('set_pressure')
+        set_flow = data.get('set_flow')
+        
+        node = get_object_or_404(Node, node_id=node_id)
+        message = []
+        
+        if set_pressure is not None:
+            pressure = float(set_pressure)
+            if node.pressure_min <= pressure <= node.pressure_max:
+                node.set_pressure = pressure
+                message.append(f"Set Pressure to {pressure} bar.")
+            else:
+                return JsonResponse({'status': 'error', 'message': f'Pressure setpoint {pressure} out of safe range ({node.pressure_min} - {node.pressure_max}).'}, status=400)
+
+        if set_flow is not None:
+            flow = float(set_flow)
+            if node.flow_min <= flow <= node.flow_max:
+                node.set_flow = flow
+                message.append(f"Set Flow to {flow} x1000m³/h.")
+            else:
+                return JsonResponse({'status': 'error', 'message': f'Flow setpoint {flow} out of safe range ({node.flow_min} - {node.flow_max}).'}, status=400)
+        
+        if not message:
+            return JsonResponse({'status': 'error', 'message': 'No valid setpoint (set_pressure or set_flow) provided.'}, status=400)
+        
+        node.save()
+        final_message = f'Node {node_id} controls updated: ' + ' '.join(message)
+        logger.info(final_message)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': final_message,
+            'new_set_pressure': node.set_pressure,
+            'new_set_flow': node.set_flow
+        })
+        
+    except Node.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': f'Node {node_id} not found.'}, status=404)
+    except Exception as e:
+        logger.error(f"Error controlling node {node_id}: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'}, status=500)
+
+
+# Remaining functions are kept as they were in the original file (simulation_data, alarms_list, acknowledge_alarm, plc_status, sensor_readings, api_root, network_data)
 def network_data(request, network_id):
     """Get network topology and current state"""
     try:
@@ -503,17 +677,21 @@ def sensor_readings(request):
 def api_root(request):
     """API root endpoint to prevent 404 spam"""
     return JsonResponse({
-        'api_version': '1.0',
+        'api_version': '1.1',
         'simulator': 'Gas Pipeline Digital Twin - GasLib-40',
         'endpoints': {
             'status': '/api/status/',
-            'start': '/api/start/', 
-            'stop': '/api/stop/',
-            'load_gaslib': '/api/load_gaslib/',
-            'network': '/api/network/<id>/',
-            'simulation': '/api/simulation/<id>/',
-            'sensors': '/api/sensors/',
-            'plcs': '/api/plcs/',
+            'start': '/api/simulation/start/', 
+            'stop': '/api/simulation/stop/',
+            'load_network': '/api/network/load/',
+            'control_valve': '/api/control/valve/<valve_id>/', # New
+            'control_valve_auto': '/api/control/valve/<valve_id>/auto/', # New
+            'control_compressor': '/api/control/compressor/<compressor_id>/', # New
+            'control_node': '/api/control/node/<node_id>/', # New (for Source/Sink setpoints)
+            'network_data': '/api/network/<id>/',
+            'simulation_data': '/api/simulation/<id>/data/',
+            'sensors': '/api/sensors/readings/',
+            'plcs': '/api/plcs/status/',
             'alarms': '/api/alarms/'
         },
         'message': 'Django-only Gas Pipeline Simulator using GasLib-40 network data'
