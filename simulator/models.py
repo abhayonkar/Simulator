@@ -5,11 +5,11 @@ import json
 from datetime import datetime
 from django.db import transaction
 
-# GasLib-40 Network Models
+# GasLib-24 Network Models
 class GasNetwork(models.Model):
-    """Represents the entire GasLib-40 network"""
-    name = models.CharField(max_length=100, default="GasLib-40")
-    description = models.TextField(default="Gas network with 40 nodes and 45 arcs")
+    """Represents the entire GasLib-24 network"""
+    name = models.CharField(max_length=100, default="GasLib-24")
+    description = models.TextField(default="Gas network with 24 nodes and 19 pipes")
     created = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

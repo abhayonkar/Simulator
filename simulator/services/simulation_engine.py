@@ -503,25 +503,11 @@ class SimulationEngine:
     def _initialize_compressors(self, network):
         """Initialize compressor models based on nodes that should have compressors (e.g., those managed by COMPRESSOR_MANAGEMENT PLCs)"""
         # Find nodes that are likely compressor stations (innode or nodes feeding innode/compressor station in GasLib)
-        compressor_nodes = Node.objects.filter(node_id__in=['innode_6', 'sink_11', 'sink_19', 'source_3', 'source_2', 'sink_3'])
+        # These nodes are from GasLib-24.net <compressorStation from="NODE_ID">
+        compressor_nodes = Node.objects.filter(node_id__in=['N04', 'N08', 'N13'])
         
         for i, node in enumerate(compressor_nodes):
             comp_id = f'COMP_{node.node_id}'
-            
-            # Try to link to a relevant PLC
-            plc = PLC.objects.filter(plc_type='COMPRESSOR_MANAGEMENT', node=node).first()
-            
-            Compressor.objects.get_or_create(
-                compressor_id=comp_id,
-                defaults={
-                    'node': node,
-                    'plc': plc,
-                    'status': 'OFF',
-                    'speed': 0.0,
-                    'set_speed': -1.0, # Auto control by default
-                    'set_command': 'AUTO' # Auto control by default
-                }
-            )
             
     def _initialize_valves(self, network):
         """Initialize valves on pipes"""

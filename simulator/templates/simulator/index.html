@@ -5,84 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <style>
-        body { font-family: 'Inter', Arial, sans-serif; margin: 0; background-color: #f0f4f8; }
+        body { font-family: 'Inter', Arial, sans-serif; margin: 0; background-color: #f0f4f8; color: #333; }
         .container { max-width: 1400px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
         .header { text-align: center; color: #1e3a8a; margin-bottom: 40px; }
         .header h1 { font-size: 2.5em; margin-bottom: 5px; }
+        .header p { font-size: 1.1em; color: #555; }
+        
+        /* Statistics Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin: 20px 0; }
-        .stat-card { background: #e0f2f1; padding: 15px; border-left: 5px solid #009688; border-radius: 8px; transition: transform 0.2s; }
+        .stat-card { background: #eef2f9; padding: 20px; border-left: 5px solid #009688; border-radius: 8px; transition: transform 0.2s, box-shadow 0.2s; }
         .stat-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
         .stat-card.warning { background: #fff8e1; border-left-color: #ff9800; }
         .stat-card.error { background: #ffebee; border-left-color: #f44336; }
         .stat-value { font-size: 28px; font-weight: bold; color: #1e3a8a; }
-        .stat-label { font-size: 14px; color: #555; margin-top: 5px; }
+        .stat-label { font-size: 14px; color: #555; margin-top: 5px; text-transform: uppercase; font-weight: 500; }
+        
+        /* Controls & Buttons */
         .controls { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e0e0e0; }
-        .button { background: #009688; color: white; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; margin: 5px 5px 5px 0; transition: background 0.3s, transform 0.1s; font-weight: 600; }
+        .button { background: #009688; color: white; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; margin: 5px 5px 5px 0; transition: background 0.3s, transform 0.1s; font-weight: 600; font-size: 0.9em; }
         .button:hover:not(:disabled) { background: #00796b; transform: translateY(-1px); }
         .button.secondary { background: #607d8b; }
         .button.secondary:hover:not(:disabled) { background: #455a64; }
         .button.danger { background: #e57373; }
         .button.danger:hover:not(:disabled) { background: #d32f2f; }
         .button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        /* Sections */
         .section { margin: 40px 0; }
         .section h3 { color: #1e3a8a; border-bottom: 3px solid #009688; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.5em; }
-        .log { background: #f0f4f8; border: 1px solid #b0bec5; padding: 15px; border-radius: 6px; height: 180px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; color: #37474f; }
-        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
-        .status-online { background-color: #28a745; }
-        .status-offline { background-color: #dc3545; }
-        .status-warning { background-color: #ffc107; }
+        
+        /* Logs */
+        .log { background: #263238; border: 1px solid #37474f; padding: 15px; border-radius: 6px; height: 180px; overflow-y: auto; font-family: 'SF Mono', 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; color: #eceff1; }
+        .log-entry { color: #80cbc4; }
+        .log-error { color: #ef9a9a; }
+        .log-success { color: #c5e1a5; }
+        
+        /* Status Indicator */
+        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
+        .status-online { background-color: #28a745; box-shadow: 0 0 8px #28a745; }
+        .status-offline { background-color: #dc3545; box-shadow: 0 0 8px #dc3545; animation: none; }
+        .status-warning { background-color: #ffc107; box-shadow: 0 0 8px #ffc107; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        /* Control Grids */
         .control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
         .control-card { background: #f5f5f5; border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; }
         .input-group { margin-bottom: 10px; }
         .input-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #37474f; font-size: 0.9em;}
-        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #b0bec5; border-radius: 4px; box-sizing: border-box; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #b0bec5; border-radius: 4px; box-sizing: border-box; background: #fff; }
+        
+        /* Component Lists */
         .component-list { max-height: 400px; overflow-y: auto; padding-right: 15px; }
-        .component-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px dashed #cfd8dc; }
-        .component-item strong { color: #1e3a8a; }
-        .control-action-group { display: flex; gap: 5px; align-items: center; }
+        .component-item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px dashed #cfd8dc; }
+        .component-item span { color: #1e3a8a; font-size: 0.9em; line-height: 1.4; }
+        .component-item strong { color: #1e3a8a; font-size: 1.1em; }
+        .component-item .status-man { color: #d32f2f; font-weight: bold; }
+        .component-item .status-auto { color: #009688; font-weight: bold; }
+
+        .control-action-group { display: flex; gap: 5px; align-items: center; width: 100%; margin-top: 8px; }
         .control-action-group input[type="number"] { width: 80px; text-align: right; margin-right: 5px; }
+        
+        /* Alarm List */
+        .alarm-list { max-height: 300px; overflow-y: auto; }
+        .alarm-item { padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 5px solid; }
+        .alarm-critical { background: #ffebee; border-color: #d32f2f; }
+        .alarm-high { background: #fff3e0; border-color: #f57c00; }
+        .alarm-medium { background: #fffde7; border-color: #fbc02d; }
+        .alarm-low { background: #e3f2fd; border-color: #1976d2; }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <div class="header">
             <h1>{{ title }}</h1>
             <p>Unified Gas Pipeline Digital Twin Simulator</p>
-            <p><span class="status-indicator status-online"></span>System Online - GasLib-40 Ready</p>
+            <p><span id="system-status-indicator" class="status-indicator status-online"></span><span id="system-status-text">System Online - GasLib-24 Ready</span></p>
         </div>
         
         <!-- System Statistics -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value">{{ network_count }}</div>
+                <div class="stat-value" id="stat-networks">{{ network_count }}</div>
                 <div class="stat-label">Networks</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ node_count }}</div>
+                <div class="stat-value" id="stat-nodes">{{ node_count }}</div>
                 <div class="stat-label">Nodes</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ pipe_count }}</div>
+                <div class="stat-value" id="stat-pipes">{{ pipe_count }}</div>
                 <div class="stat-label">Pipes</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ valve_count }}</div>
+                <div class="stat-value" id="stat-valves">{{ valve_count }}</div>
                 <div class="stat-label">Valves</div>
             </div>
              <div class="stat-card">
-                <div class="stat-value">{{ compressor_count }}</div>
+                <div class="stat-value" id="stat-compressors">{{ compressor_count }}</div>
                 <div class="stat-label">Compressors</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ plc_count }}</div>
+                <div class="stat-value" id="stat-plcs">{{ plc_count }}</div>
                 <div class="stat-label">PLCs</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ sensor_count }}</div>
+                <div class="stat-value" id="stat-sensors">{{ sensor_count }}</div>
                 <div class="stat-label">Sensors</div>
             </div>
-            <div class="stat-card {% if active_alarms > 0 %}warning{% else %}stat-card{% endif %}">
-                <div class="stat-value">{{ active_alarms }}</div>
+            <div id="stat-alarms-card" class="stat-card {% if active_alarms > 0 %}warning{% endif %}">
+                <div class="stat-value" id="stat-alarms">{{ active_alarms }}</div>
                 <div class="stat-label">Active Alarms</div>
             </div>
         </div>
@@ -113,11 +145,11 @@
                         </div>
                     </div>
                      <div style="align-self: end;">
-                        <button class="button" onclick="loadGasLibNetwork()">Load GasLib-40 Network</button>
+                        <button class="button" onclick="loadGasLibNetwork()">Reload GasLib-24 Network</button>
                         <button class="button secondary" onclick="refreshNetworkData()">Refresh Network Data</button>
                         <hr style="margin: 10px 0;">
-                        <button class="button" onclick="startSimulation()">Start Simulation</button>
-                        <button class="button danger" onclick="stopSimulation()">Stop Simulation</button>
+                        <button class="button" id="btn-start" onclick="startSimulation()">Start Simulation</button>
+                        <button class="button danger" id="btn-stop" onclick="stopSimulation()" disabled>Stop Simulation</button>
                         <button class="button secondary" onclick="checkStatus()">Check Status</button>
                     </div>
                 </div>
@@ -133,10 +165,10 @@
                 <div class="control-card">
                     <h4>Valves ({{ valve_count }})</h4>
                     <p style="font-size: 0.8em; color: #546e7a; margin-bottom: 10px;">Set position (0-100%). Use AUTO to revert to PLC control.</p>
-                    <div class="component-list">
+                    <div class="component-list" id="valve-list">
                         {% for valve in valves %}
                         <div class="component-item">
-                            <span><strong>{{ valve.valve_id }}</strong> ({{ valve.pipe.pipe_id }})<br>Current: {{ valve.position|floatformat:1 }}% | Set: {% if valve.set_position >= 0 %}<span style="color: #d32f2f;">{{ valve.set_position|floatformat:1 }}% (MAN)</span>{% else %}<span style="color: #009688;">Auto</span>{% endif %}</span>
+                            <span><strong>{{ valve.valve_id }}</strong> ({{ valve.pipe.pipe_id }})<br>Current: {{ valve.position|floatformat:1 }}% | Set: {% if valve.set_position >= 0 %}<span class="status-man">{{ valve.set_position|floatformat:1 }}% (MAN)</span>{% else %}<span class="status-auto">Auto</span>{% endif %}</span>
                             <div class="control-action-group">
                                 <input type="number" id="valve_pos_{{ valve.valve_id }}" value="50" min="0" max="100" step="1" title="Position 0-100%">
                                 <button class="button" onclick="setValvePosition('{{ valve.valve_id }}')">SET</button>
@@ -153,10 +185,10 @@
                 <div class="control-card">
                     <h4>Compressors ({{ compressor_count }})</h4>
                     <p style="font-size: 0.8em; color: #546e7a; margin-bottom: 10px;">Command (ON/OFF) and Speed (RPM). Use AUTO to revert to PLC control.</p>
-                    <div class="component-list">
+                    <div class="component-list" id="compressor-list">
                         {% for comp in compressors %}
                         <div class="component-item">
-                            <span><strong>{{ comp.compressor_id }}</strong> ({{ comp.node.node_id }})<br>Status: {{ comp.get_status_display }} | Speed: {{ comp.speed|floatformat:0 }} RPM<br>Set Cmd: {{ comp.set_command }} | Set Speed: {% if comp.set_speed >= 0 %}{{ comp.set_speed|floatformat:0 }} RPM{% else %}Auto{% endif %}</span>
+                            <span><strong>{{ comp.compressor_id }}</strong> ({{ comp.node.node_id }})<br>Status: {{ comp.get_status_display }} | Speed: {{ comp.speed|floatformat:0 }} RPM<br>Set Cmd: {% if comp.set_command == 'AUTO' %}<span class="status-auto">Auto</span>{% else %}<span class="status-man">{{ comp.set_command }}</span>{% endif %} | Set Speed: {% if comp.set_speed >= 0 %}<span class="status-man">{{ comp.set_speed|floatformat:0 }} RPM</span>{% else %}<span class="status-auto">Auto</span>{% endif %}</span>
                             <div class="control-action-group">
                                 <input type="number" id="comp_speed_{{ comp.compressor_id }}" value="10000" min="0" max="{{ comp.max_speed|floatformat:0 }}" step="100" title="Target Speed (RPM)">
                                 <button class="button" onclick="setCompressorCommand('{{ comp.compressor_id }}', 'ON')">ON</button>
@@ -174,14 +206,14 @@
                 <div class="control-card">
                     <h4>Node Setpoints (Sources/Sinks)</h4>
                     <p style="font-size: 0.8em; color: #546e7a; margin-bottom: 10px;">Set Pressure (bar) or Flow (x1000m³/h) at source/sink nodes.</p>
-                    <div class="component-list">
+                    <div class="component-list" id="node-list">
                          {% for node in control_nodes %}
                         <div class="component-item" style="flex-wrap: wrap;">
                             <div style="width: 100%;">
                                 <strong>{{ node.node_id }}</strong> ({{ node.get_node_type_display }})
-                                <br>P Set: {{ node.set_pressure|floatformat:1 }} bar | F Set: {{ node.set_flow|floatformat:1 }} x1000m³/h
+                                <br>P Set: <span class="status-man">{{ node.set_pressure|floatformat:1 }} bar</span> | F Set: <span class="status-man">{{ node.set_flow|floatformat:1 }} k-m³/h</span>
                             </div>
-                            <div class="control-action-group" style="width: 100%; margin-top: 5px;">
+                            <div class="control-action-group" style="width: 100%; margin-top: 5px; justify-content: space-between;">
                                 <input type="number" id="node_p_{{ node.node_id }}" value="{{ node.set_pressure|floatformat:1 }}" min="{{ node.pressure_min|floatformat:1 }}" max="{{ node.pressure_max|floatformat:1 }}" step="1" title="Set Pressure (bar)">
                                 <button class="button" onclick="setNodeSetpoint('{{ node.node_id }}', 'P')">Set P</button>
                                 <input type="number" id="node_f_{{ node.node_id }}" value="{{ node.set_flow|floatformat:1 }}" min="{{ node.flow_min|floatformat:1 }}" max="{{ node.flow_max|floatformat:1 }}" step="1" title="Set Flow (x1000m³/h)">
@@ -189,7 +221,7 @@
                             </div>
                         </div>
                         {% empty %}
-                        <p>No control nodes found.</p>
+                        <p>No control nodes found. Load a network and start simulation.</p>
                         {% endfor %}
                     </div>
                 </div>
@@ -234,6 +266,35 @@
             </div>
         </div>
         
+        <!-- --- New Export Section --- -->
+        <div class="section">
+            <h3>Export Simulation Data</h3>
+            <div class="controls">
+                <p style="font-size: 0.9em; color: #546e7a; margin-top: 0; margin-bottom: 15px;">
+                    Download all time-series data for a completed simulation run as a CSV file.
+                </p>
+                <div class="component-list" id="simulation-list" style="max-height: 300px;">
+                    {% for sim in simulations %}
+                    <div class="component-item">
+                        <span>
+                            <strong>{{ sim.run_id }}</strong> ({{ sim.get_status_display }})
+                            <br>
+                            <span style="font-size: 0.9em; color: #555;">
+                                Started: {{ sim.start_time|date:"Y-m-d H:i"|default:"N/A" }} | Steps: {{ sim.total_steps }}
+                            </span>
+                        </span>
+                        <div class="control-action-group" style="width: auto;">
+                            <button class_id="btn-export-{{ sim.id }}" class="button secondary" onclick="downloadCSV({{ sim.id }})">Download CSV</button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p>No simulation runs found.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <!-- --- End New Export Section --- -->
+        
         <!-- Results Display -->
         <div class="section">
             <h3>System Messages</h3>
@@ -246,22 +307,50 @@
     <script>
         // Global variables
         let currentSimulationId = null;
-        
+        let statusInterval = null;
+
+        // CSRF Token for POST requests
+        const csrfToken = '{{ csrf_token }}';
+
         function logMessage(message, type = 'info') {
             const resultDiv = document.getElementById('result');
             const timestamp = new Date().toLocaleTimeString();
-            const logEntry = `[${timestamp}] ${message}\n`;
+            let colorClass = 'log-entry';
+            if (type === 'error') colorClass = 'log-error';
+            if (type === 'success') colorClass = 'log-success';
+
+            const logEntry = `<div class="${colorClass}">[${timestamp}] ${message}</div>`;
             
-            // Check if adding the new log entry will exceed max length (e.g., 5000 chars)
-            if (resultDiv.textContent.length + logEntry.length > 5000) {
-                // Keep only the last 4000 chars roughly to avoid performance issues
-                const lines = resultDiv.textContent.split('\n');
-                const newLines = lines.slice(Math.max(0, lines.length - 30)); 
-                resultDiv.textContent = newLines.join('\n');
-            }
+            resultDiv.innerHTML += logEntry;
             
-            resultDiv.textContent += logEntry;
+            // Auto-scroll
             resultDiv.scrollTop = resultDiv.scrollHeight;
+        }
+
+        function setSimulationStatus(running) {
+            const startBtn = document.getElementById('btn-start');
+            const stopBtn = document.getElementById('btn-stop');
+            const statusIndicator = document.getElementById('system-status-indicator');
+            const statusText = document.getElementById('system-status-text');
+
+            if (running) {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                statusIndicator.className = 'status-indicator status-warning';
+                statusText.textContent = 'Simulation Running...';
+                if (!statusInterval) {
+                    statusInterval = setInterval(checkStatus, 5000); // Check status every 5s when running
+                }
+            } else {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                statusIndicator.className = 'status-indicator status-online';
+                statusText.textContent = 'System Online - Ready';
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                }
+            }
         }
 
         // --- New Control Functions ---
@@ -279,13 +368,13 @@
             
             fetch(`/api/control/valve/${valveId}/`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify({ position: position })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message}`);
+                    logMessage(`✓ ${data.message}`, 'success');
                     setTimeout(() => window.location.reload(), 500); // Quick refresh to show state
                 } else {
                     logMessage(`✗ Error setting valve: ${data.message}`, 'error');
@@ -299,12 +388,12 @@
             
             fetch(`/api/control/valve/${valveId}/auto/`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message}`);
+                    logMessage(`✓ ${data.message}`, 'success');
                     setTimeout(() => window.location.reload(), 500);
                 } else {
                     logMessage(`✗ Error setting valve to auto: ${data.message}`, 'error');
@@ -331,13 +420,13 @@
 
             fetch(`/api/control/compressor/${compressorId}/`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify(payload)
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message}`);
+                    logMessage(`✓ ${data.message}`, 'success');
                     setTimeout(() => window.location.reload(), 500);
                 } else {
                     logMessage(`✗ Error setting compressor: ${data.message}`, 'error');
@@ -353,7 +442,7 @@
             if (type === 'P') {
                 const pressureInput = document.getElementById(`node_p_${nodeId}`);
                 setpoint = parseFloat(pressureInput.value);
-                if (isNaN(setpoint) || setpoint < 0) {
+                if (isNaN(setpoint)) {
                     logMessage('✗ Invalid pressure setpoint.', 'error');
                     return;
                 }
@@ -362,7 +451,7 @@
             } else if (type === 'F') {
                 const flowInput = document.getElementById(`node_f_${nodeId}`);
                 setpoint = parseFloat(flowInput.value);
-                 if (isNaN(setpoint) || setpoint < 0) {
+                 if (isNaN(setpoint)) {
                     logMessage('✗ Invalid flow setpoint.', 'error');
                     return;
                 }
@@ -374,13 +463,13 @@
             
             fetch(`/api/control/node/${nodeId}/`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify(payload)
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message}`);
+                    logMessage(`✓ ${data.message}`, 'success');
                     setTimeout(() => window.location.reload(), 500);
                 } else {
                     logMessage(`✗ Error setting node setpoint: ${data.message}`, 'error');
@@ -392,17 +481,18 @@
         // --- Existing Functions (retained) ---
         
         function loadGasLibNetwork() {
-            logMessage('Loading GasLib-40 network...');
+            logMessage('Reloading GasLib-24 network... This will clear all existing data.');
             
             fetch('/api/network/load/', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message} - ${data.nodes} nodes, ${data.pipes} pipes`);
-                    setTimeout(() => window.location.reload(), 1000);
+                    logMessage(`✓ ${data.message} - ${data.nodes} nodes, ${data.pipes} pipes`, 'success');
+                    logMessage('Page will now reload.');
+                    setTimeout(() => window.location.reload(), 1500);
                 } else {
                     logMessage(`✗ Error: ${data.message}`, 'error');
                 }
@@ -418,16 +508,17 @@
             const networkSelect = document.getElementById('network');
             const networkId = networkSelect.value;
             
-            if (!networkId) {
-                logMessage('✗ Please select a network first', 'error');
+            if (!networkId || networkId === "") {
+                logMessage('✗ No network loaded or selected. Please load a network first.', 'error');
                 return;
             }
             
             logMessage(`Starting simulation: ${duration}s duration, ${timestep}s timestep...`);
+            setSimulationStatus(true);
             
             fetch('/api/simulation/start/', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify({
                     network_id: parseInt(networkId),
                     duration: duration,
@@ -438,15 +529,19 @@
             .then(data => {
                 if (data.status === 'success') {
                     currentSimulationId = data.simulation_id;
-                    logMessage(`✓ Simulation ${data.run_id} started successfully`);
+                    logMessage(`✓ Simulation ${data.run_id} started successfully`, 'success');
                     logMessage(`  Network: ${data.network}`);
                     logMessage(`  Duration: ${data.duration}s | Time Step: ${data.time_step}s`);
+                    // Reload the page to get the new simulation in the export list
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     logMessage(`✗ Error: ${data.message}`, 'error');
+                    setSimulationStatus(false);
                 }
             })
             .catch(error => {
                 logMessage(`✗ Error starting simulation: ${error.message}`, 'error');
+                setSimulationStatus(false);
             });
         }
         
@@ -455,13 +550,16 @@
             
             fetch('/api/simulation/stop/', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage('✓ Simulation stopped successfully');
+                    logMessage('✓ Simulation stopped successfully', 'success');
                     currentSimulationId = null;
+                    setSimulationStatus(false);
+                    // Reload the page to update the status of the run in the export list
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     logMessage(`✗ Error: ${data.message}`, 'error');
                 }
@@ -475,12 +573,35 @@
             fetch('/api/simulation/status/')
             .then(response => response.json())
             .then(data => {
+                if (data.status === 'error') {
+                    logMessage(`✗ Error getting status: ${data.message}`, 'error');
+                    setSimulationStatus(false);
+                    return;
+                }
+
                 logMessage('=== System Status ===');
-                logMessage(`Status: ${data.status}`);
-                logMessage(`Networks: ${data.networks} | Nodes: ${data.nodes} | Pipes: ${data.pipes}`);
-                logMessage(`Valves: ${data.valves} | Compressors: ${data.compressors} | PLCs: ${data.plcs}`);
-                logMessage(`Active Alarms: ${data.active_alarms}`);
-                logMessage(`Engine Running: ${data.engine_running}`);
+                logMessage(`Status: ${data.status} | Engine Running: ${data.engine_running}`);
+                
+                // Update stats
+                document.getElementById('stat-networks').textContent = data.networks;
+                document.getElementById('stat-nodes').textContent = data.nodes;
+                document.getElementById('stat-pipes').textContent = data.pipes;
+                document.getElementById('stat-valves').textContent = data.valves;
+                document.getElementById('stat-compressors').textContent = data.compressors;
+                document.getElementById('stat-plcs').textContent = data.plcs;
+                document.getElementById('stat-sensors').textContent = data.sensors;
+                document.getElementById('stat-alarms').textContent = data.active_alarms;
+                
+                // Update alarm card style
+                const alarmCard = document.getElementById('stat-alarms-card');
+                if (data.active_alarms > 0) {
+                    if (alarmCard) alarmCard.classList.add('warning');
+                } else {
+                    if (alarmCard) alarmCard.classList.remove('warning');
+                }
+
+                // Update simulation status
+                setSimulationStatus(data.engine_running);
                 
                 if (data.latest_simulation) {
                     const sim = data.latest_simulation;
@@ -489,6 +610,7 @@
             })
             .catch(error => {
                 logMessage(`✗ Error getting status: ${error.message}`, 'error');
+                setSimulationStatus(false);
             });
         }
         
@@ -500,12 +622,12 @@
                 logMessage('Please select a network first', 'warning');
                 return;
             }
-            
+            logMessage('Refreshing network data...')
             fetch(`/api/network/${networkId}/`)
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`Network ${data.network.name}: ${data.nodes.length} nodes, ${data.pipes.length} pipes`);
+                    logMessage(`Network ${data.network.name}: ${data.nodes.length} nodes, ${data.pipes.length} pipes`, 'success');
                     logMessage(`Sensors: ${data.sensors.length} | PLCs: ${data.plcs.length}`);
                 } else {
                     logMessage(`✗ Error: ${data.message}`, 'error');
@@ -524,8 +646,8 @@
                 if (data.status === 'success') {
                     let content = `=== PLC Status (${data.total_active} active) ===\n`;
                     data.plcs.forEach(plc => {
-                        content += `${plc.id} (${plc.type}) @ ${plc.node}\n`;
-                        content += `  Active: ${plc.active} | Inputs: ${plc.inputs} | Outputs: ${plc.outputs}\n`;
+                        content += `[${plc.id}] (${plc.type}) @ ${plc.node}\n`;
+                        content += `  Active: ${plc.active} | Inputs: ${JSON.stringify(plc.inputs)} | Outputs: ${JSON.stringify(plc.outputs)}\n`;
                         content += `  Alarms: ${plc.active_alarms} | Last Scan: ${plc.last_scan ? new Date(plc.last_scan).toLocaleTimeString() : 'Never'}\n\n`;
                     });
                     statusDiv.textContent = content;
@@ -546,8 +668,8 @@
                 if (data.status === 'success') {
                     let content = `=== Sensor Readings (${data.total_active} active) ===\n`;
                     data.sensors.forEach(sensor => {
-                        content += `${sensor.id} (${sensor.type}) @ ${sensor.location}\n`;
-                        content += `  Value: ${sensor.value} ${sensor.unit} | Quality: ${sensor.quality}\n`;
+                        content += `[${sensor.id}] (${sensor.type}) @ ${sensor.location}\n`;
+                        content += `  Value: ${Number(sensor.value).toFixed(2)} ${sensor.unit} | Quality: ${sensor.quality}\n`;
                         content += `  Last Update: ${new Date(sensor.last_update).toLocaleTimeString()}\n\n`;
                     });
                     readingsDiv.textContent = content;
@@ -565,6 +687,14 @@
             .then(response => response.json())
             .then(data => {
                 const alarmsDiv = document.getElementById('alarmsList');
+                document.getElementById('stat-alarms').textContent = data.total_active;
+                const alarmCard = document.getElementById('stat-alarms-card');
+                if (data.total_active > 0) {
+                    if (alarmCard) alarmCard.classList.add('warning');
+                } else {
+                    if (alarmCard) alarmCard.classList.remove('warning');
+                }
+
                 if (data.status === 'success') {
                     if (data.alarms.length === 0) {
                         alarmsDiv.innerHTML = '<p style="padding: 15px;">No active alarms</p>';
@@ -593,13 +723,13 @@
         function acknowledgeAlarm(alarmId) {
             fetch(`/api/alarms/${alarmId}/acknowledge/`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify({acknowledged_by: 'Web User'})
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    logMessage(`✓ ${data.message}`);
+                    logMessage(`✓ ${data.message}`, 'success');
                     refreshAlarms(); // Refresh the alarm list
                 } else {
                     logMessage(`✗ Error: ${data.message}`, 'error');
@@ -609,27 +739,40 @@
                 logMessage(`✗ Error acknowledging alarm: ${error.message}`, 'error');
             });
         }
-        
-        // Auto-refresh functions
-        function startAutoRefresh() {
-            // Refresh main status every 30 seconds
-            setInterval(checkStatus, 30000);
+
+        // --- New Download Function ---
+        function downloadCSV(simId) {
+            if (simId === null || simId === undefined) {
+                logMessage('✗ Invalid simulation ID.', 'error');
+                return;
+            }
+            logMessage(`Generating CSV for simulation ID ${simId}... This may take a moment.`, 'info');
             
-            // Refresh component statuses every 10 seconds
-            setInterval(refreshPLCStatus, 10000);
-            setInterval(refreshSensorReadings, 10000);
-            setInterval(refreshAlarms, 10000);
-            
-            // Reload page periodically (e.g., every 5 minutes) for full component list update if needed
-            // setInterval(() => window.location.reload(), 300000); 
+            // This URL will trigger the file download
+            window.location.href = `/api/simulation/${simId}/export/`;
         }
+        
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             logMessage('Gas Pipeline Simulator initialized');
-            checkStatus();
-            startAutoRefresh();
+            checkStatus(); // Initial status check
+            
+            // Start auto-refreshers
+            // checkStatus() will set/clear its own interval based on sim state
+            
+            // Refresh non-critical data every 10 seconds
+            setInterval(() => {
+                // Only refresh component data if simulation is NOT running
+                // to avoid interfering with the page state
+                if (!simulation_engine.running) { 
+                    refreshPLCStatus();
+                    refreshSensorReadings();
+                    refreshAlarms();
+                }
+            }, 10000);
         });
     </script>
 </body>
 </html>
+

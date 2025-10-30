@@ -1,4 +1,4 @@
-# GasLib-40 XML Parser for Django Models
+# GasLib-24 XML Parser for Django Models
 import xml.etree.ElementTree as ET
 import logging
 from django.conf import settings
@@ -7,7 +7,7 @@ from ..models import GasNetwork, Node, Pipe
 logger = logging.getLogger(__name__)
 
 class GasLibParser:
-    """Parser for GasLib-40 network XML files"""
+    """Parser for GasLib-24 network XML files"""
     
     def __init__(self, xml_file_path):
         self.xml_file_path = xml_file_path
@@ -17,29 +17,30 @@ class GasLibParser:
         }
     
     def parse_and_create_network(self):
-        """Parse GasLib-40 XML and create Django models"""
+        """Parse GasLib-24 XML and create Django models"""
         try:
             tree = ET.parse(self.xml_file_path)
             root = tree.getroot()
             
             # Get network information
             info = root.find('framework:information', self.namespace)
-            title = info.find('framework:title', self.namespace).text if info else "GasLib-40"
-            doc = info.find('framework:documentation', self.namespace).text if info else "Gas network with 40 nodes and 45 arcs"
+            title = info.find('framework:title', self.namespace).text if info else "GasLib-24"
+            doc = info.find('framework:documentation', self.namespace).text if info else "Gas network with 24 nodes"
             
-            # Create or get network
-            network, created = GasNetwork.objects.get_or_create(
+            # --- THIS IS THE FIX ---
+            # Delete ALL existing networks and their related components (nodes, pipes, etc.)
+            # This ensures a clean import every time.
+            logger.info("Deleting all existing network data before reload...")
+            GasNetwork.objects.all().delete()
+            logger.info("Existing data cleared.")
+            # --- END FIX ---
+
+            # Create the new network
+            network = GasNetwork.objects.create(
                 name=title,
-                defaults={'description': doc}
+                description=doc
             )
-            
-            if created:
-                logger.info(f"Created new network: {title}")
-            else:
-                logger.info(f"Using existing network: {title}")
-                # Clear existing data if re-parsing
-                network.nodes.all().delete()
-                network.pipes.all().delete()
+            logger.info(f"Created new network: {title}")
             
             # Parse nodes
             nodes_element = root.find('framework:nodes', self.namespace)
@@ -66,15 +67,21 @@ class GasLibParser:
             pipe_count = 0
             
             if connections_element is not None:
+                # We only parse 'pipe' elements for this simulation
                 for pipe in connections_element.findall('gas:pipe', self.namespace):
                     self._create_pipe(network, pipe)
                     pipe_count += 1
+                
+                # Note: compressorStation, resistor, valve elements in the .net file
+                # are also under connections, but we model them differently or ignore
+                # for this simulation's physics. Compressors and Valves are created
+                # separately by the simulation engine.
             
             logger.info(f"Network parsed successfully: {node_count} nodes, {pipe_count} pipes")
             return network
             
         except Exception as e:
-            logger.error(f"Error parsing GasLib-40 file: {e}")
+            logger.error(f"Error parsing GasLib file: {e}")
             raise
     
     def _create_node(self, network, element, node_type):
@@ -112,6 +119,10 @@ class GasLibParser:
             calorific_value = float(calorific_elem.get('value', 36.4543670654)) if calorific_elem is not None else 36.4543670654
             norm_density = float(density_elem.get('value', 0.785)) if density_elem is not None else 0.785
             
+            # Set initial pressure and flow
+            initial_pressure = (pressure_min + pressure_max) / 2
+            initial_flow = 0.0 # Will be controlled by setpoints
+
             # Create node
             node = Node.objects.create(
                 network=network,
@@ -125,10 +136,13 @@ class GasLibParser:
                 height=height,
                 pressure_min=pressure_min,
                 pressure_max=pressure_max,
-                current_pressure=(pressure_min + pressure_max) / 2,  # Initial pressure
+                current_pressure=initial_pressure,
                 flow_min=flow_min,
                 flow_max=flow_max,
-                current_flow=0.0,
+                current_flow=initial_flow,
+                # Set initial setpoints based on type
+                set_pressure= initial_pressure if node_type == 'source' else pressure_min,
+                set_flow= initial_flow,
                 gas_temperature=gas_temperature,
                 calorific_value=calorific_value,
                 norm_density=norm_density
@@ -158,9 +172,16 @@ class GasLibParser:
             diameter_elem = element.find('gas:diameter', self.namespace)
             roughness_elem = element.find('gas:roughness', self.namespace)
             
+            # GasLib stores length in km, diameter in mm, roughness in mm
+            # Model stores length in km, diameter in m, roughness in m
+            
             length = float(length_elem.get('value', 10.0)) if length_elem is not None else 10.0
-            diameter = float(diameter_elem.get('value', 0.5)) if diameter_elem is not None else 0.5
-            roughness = float(roughness_elem.get('value', 0.0001)) if roughness_elem is not None else 0.0001
+            
+            diameter_mm = float(diameter_elem.get('value', 500)) if diameter_elem is not None else 500.0
+            diameter_m = diameter_mm / 1000.0 # Convert mm to m
+            
+            roughness_mm = float(roughness_elem.get('value', 0.05)) if roughness_elem is not None else 0.05
+            roughness_m = roughness_mm / 1000.0 # Convert mm to m
             
             # Create pipe
             pipe = Pipe.objects.create(
@@ -170,8 +191,8 @@ class GasLibParser:
                 from_node=from_node,
                 to_node=to_node,
                 length=length,
-                diameter=diameter,
-                roughness=roughness,
+                diameter=diameter_m,
+                roughness=roughness_m,
                 current_flow=0.0,
                 is_active=True
             )
@@ -182,3 +203,4 @@ class GasLibParser:
         except Exception as e:
             logger.error(f"Error creating pipe {element.get('id')}: {e}")
             raise
+

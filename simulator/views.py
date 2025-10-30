@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError
@@ -9,6 +9,7 @@ from django.utils import timezone
 import json
 import os
 import logging
+import csv  # Import the CSV module
 
 from .models import (
     Run, GasNetwork, Node, Pipe, Sensor, PLC, PLCAlarm, Valve, Compressor,
@@ -23,8 +24,54 @@ logger = logging.getLogger(__name__)
 # Global simulation engine instance
 simulation_engine = SimulationEngine()
 
+def _ensure_network_loaded():
+    """
+    Checks if any network is loaded. If not, loads the default GasLib-24 network.
+    Also removes any old GasLib-40 networks.
+    """
+    # --- FIX: Proactively delete any old GasLib-40 network ---
+    try:
+        old_network = GasNetwork.objects.filter(name__icontains="GasLib-40").first()
+        if old_network:
+            logger.warning("Found and deleting old GasLib-40 network...")
+            old_network.delete()
+            logger.info("Old GasLib-40 network deleted.")
+    except Exception as e:
+        logger.error(f"Error during cleanup of old networks: {e}")
+    # --- END FIX ---
+
+    if GasNetwork.objects.count() == 0:
+        logger.info("No networks found in database. Loading default GasLib-24 network...")
+        try:
+            # Path to GasLib-24 file
+            gaslib_file = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'GasLib-24-v1-20211130',
+                'GasLib-24-v1-20211130.net'
+            )
+            
+            if not os.path.exists(gaslib_file):
+                logger.error(f"Default GasLib-24 file not found at {gaslib_file}. Cannot auto-load.")
+                return
+
+            # Parse and create network
+            parser = GasLibParser(gaslib_file)
+            
+            with transaction.atomic():
+                network = parser.parse_and_create_network()
+            
+            logger.info(f"Successfully auto-loaded default network: {network.name}")
+
+        except Exception as e:
+            logger.error(f"Error auto-loading GasLib-24 network: {e}")
+
 def index(request):
     """Main dashboard for gas pipeline simulator"""
+    
+    # --- Auto-load network if none exist ---
+    _ensure_network_loaded()
+    # --- End auto-load ---
+    
     # Get network and simulation statistics
     network_count = GasNetwork.objects.count()
     node_count = Node.objects.count()
@@ -36,8 +83,8 @@ def index(request):
     simulation_count = SimulationRun.objects.count()
     active_alarms = PLCAlarm.objects.filter(acknowledged=False).count()
     
-    # Get recent simulations
-    recent_simulations = SimulationRun.objects.order_by('-created')[:5]
+    # Get all simulations for the new export list
+    simulations = SimulationRun.objects.order_by('-created')
     
     # Get networks
     networks = GasNetwork.objects.all()
@@ -48,7 +95,7 @@ def index(request):
     nodes = Node.objects.filter(node_type__in=['source', 'sink']).all()
     
     context = {
-        'title': 'Gas Pipeline Simulator - GasLib-40',
+        'title': 'Gas Pipeline Simulator - GasLib-24',
         'network_count': network_count,
         'node_count': node_count,
         'pipe_count': pipe_count,
@@ -58,7 +105,7 @@ def index(request):
         'compressor_count': compressor_count, # Pass new count
         'simulation_count': simulation_count,
         'active_alarms': active_alarms,
-        'recent_simulations': recent_simulations,
+        'simulations': simulations, # Pass all simulations
         'networks': networks,
         'total_runs': Run.objects.count(),  # Legacy compatibility
         
@@ -73,33 +120,33 @@ def index(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def load_gaslib_network(request):
-    """Load GasLib-40 network from XML file"""
+    """Load GasLib-24 network from XML file"""
     try:
-        # Path to GasLib-40 file
+        # Path to GasLib-24 file
         gaslib_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'GasLib-40-v1-20211130',
-            'GasLib-40-v1-20211130.net'
+            'GasLib-24-v1-20211130',
+            'GasLib-24-v1-20211130.net'
         )
         
         if not os.path.exists(gaslib_file):
             return JsonResponse({
                 'status': 'error',
-                'message': f'GasLib-40 file not found at {gaslib_file}'
+                'message': f'GasLib-24 file not found at {gaslib_file}'
             })
         
-        # Parse and create network
+        # Parse and create network (parser now handles deletion)
         parser = GasLibParser(gaslib_file)
         
         with transaction.atomic():
             network = parser.parse_and_create_network()
         
         # NOTE: Sensors, PLCs, Valves, Compressors are initialized when simulation starts.
-        logger.info(f"Successfully loaded GasLib-40 network: {network.name}")
+        logger.info(f"Successfully loaded GasLib-24 network: {network.name}")
         
         return JsonResponse({
             'status': 'success',
-            'message': f'GasLib-40 network loaded successfully',
+            'message': f'GasLib-24 network reloaded successfully',
             'network_id': network.id,
             'network_name': network.name,
             'nodes': network.nodes.count(),
@@ -107,7 +154,7 @@ def load_gaslib_network(request):
         })
         
     except Exception as e:
-        logger.error(f"Error loading GasLib-40 network: {e}")
+        logger.error(f"Error loading GasLib-24 network: {e}")
         return JsonResponse({
             'status': 'error',
             'message': f'Error loading network: {str(e)}'
@@ -127,7 +174,7 @@ def start_simulation(request):
             if not network:
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'No network available. Please load GasLib-40 network first.'
+                    'message': 'No network available. Please load GasLib-24 network first.'
                 })
         else:
             network = get_object_or_404(GasNetwork, id=network_id)
@@ -650,7 +697,7 @@ def sensor_readings(request):
     try:
         sensors_data = []
         for sensor in Sensor.objects.filter(is_active=True):
-            location = sensor.node.node_id if sensor.node else sensor.pipe.pipe_id
+            location = sensor.node.node_id if sensor.node else (sensor.pipe.pipe_id if sensor.pipe else 'N/A')
             sensors_data.append({
                 'id': sensor.sensor_id,
                 'type': sensor.get_sensor_type_display(),
@@ -678,7 +725,7 @@ def api_root(request):
     """API root endpoint to prevent 404 spam"""
     return JsonResponse({
         'api_version': '1.1',
-        'simulator': 'Gas Pipeline Digital Twin - GasLib-40',
+        'simulator': 'Gas Pipeline Digital Twin - GasLib-24',
         'endpoints': {
             'status': '/api/status/',
             'start': '/api/simulation/start/', 
@@ -690,9 +737,87 @@ def api_root(request):
             'control_node': '/api/control/node/<node_id>/', # New (for Source/Sink setpoints)
             'network_data': '/api/network/<id>/',
             'simulation_data': '/api/simulation/<id>/data/',
+            'export_csv': '/api/simulation/<id>/export/', # New
             'sensors': '/api/sensors/readings/',
             'plcs': '/api/plcs/status/',
             'alarms': '/api/alarms/'
         },
-        'message': 'Django-only Gas Pipeline Simulator using GasLib-40 network data'
+        'message': 'Django-only Gas Pipeline Simulator using GasLib-24 network data'
     })
+
+# --- New Export View ---
+
+def export_simulation_data(request, simulation_id):
+    """
+    Exports all time-series data for a given simulation run as a single CSV file.
+    This function pivots the data from a long to a wide format.
+    """
+    try:
+        simulation_run = get_object_or_404(SimulationRun, id=simulation_id)
+        
+        # 1. Fetch all data for this run
+        data_points = SimulationTimeSeriesData.objects.filter(
+            simulation_run=simulation_run
+        ).order_by('timestamp')
+
+        if not data_points.exists():
+            logger.warning(f"No time-series data found for simulation {simulation_id}.")
+            # Return an empty CSV as a fallback
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="simulation_{simulation_run.run_id}_empty.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['timestamp', 'message'])
+            writer.writerow([0, 'No data found for this simulation run.'])
+            return response
+
+        logger.info(f"Pivoting data for simulation {simulation_run.run_id}...")
+
+        # 2. Pivot the data (group by timestamp)
+        pivoted_data = {}  # { timestamp: { col_name: value, ... } }
+        all_columns = set() # Keep track of all unique column headers
+
+        for point in data_points:
+            ts = point.timestamp
+            if ts not in pivoted_data:
+                pivoted_data[ts] = {}
+            
+            # Create a base name, e.g., "sensor_reading_pressure_node_1"
+            base_key = f"{point.measurement_type}_{point.object_id}"
+            
+            # The 'data' field is a JSON. We need to flatten it.
+            # e.g., data = {"value": 50.1} -> col_name = "sensor_reading_pressure_node_1_value"
+            # e.g., data = {"status": "RUNNING", "speed": 10000} ->
+            #      col_name_1 = "compressor_state_COMP_N04_status"
+            #      col_name_2 = "compressor_state_COMP_N04_speed"
+            
+            for key, value in point.data.items():
+                col_name = f"{base_key}_{key}"
+                all_columns.add(col_name)
+                pivoted_data[ts][col_name] = value
+
+        # 3. Create the CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="simulation_data_{simulation_run.run_id}.csv"'
+        
+        writer = csv.writer(response)
+        
+        # 4. Write Header Row
+        sorted_columns = sorted(list(all_columns))
+        writer.writerow(['timestamp'] + sorted_columns)
+        
+        # 5. Write Data Rows
+        for ts in sorted(pivoted_data.keys()):
+            row_data = pivoted_data[ts]
+            row = [ts]
+            for col in sorted_columns:
+                # Use .get() to handle missing data for a specific timestamp (pads with empty string)
+                row.append(row_data.get(col, ''))
+            writer.writerow(row)
+            
+        logger.info(f"Successfully generated CSV for simulation {simulation_run.run_id}.")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting CSV for simulation {simulation_id}: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Error generating CSV: {str(e)}'}, status=500)
+
